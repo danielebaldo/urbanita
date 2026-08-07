@@ -242,10 +242,15 @@ export async function fetchLabels(qids, signal) {
  * entity happens to have no English sitelink, so the caller can retry.
  */
 export async function fetchRandomCityTitle(signal) {
+  // bd:sample.limit is a *sample size*, not a result cap — most sampled
+  // Q515 entities don't carry an English sitelink, so sampling only 1
+  // leaves the join empty roughly half the time. Sampling a handful and
+  // taking the first that resolves to an enwiki article makes a single
+  // request reliably productive.
   const query = `SELECT ?article WHERE {
     SERVICE bd:sample {
       ?city wdt:P31 wd:Q515 .
-      bd:serviceParam bd:sample.limit 1 .
+      bd:serviceParam bd:sample.limit 10 .
       bd:serviceParam bd:sample.sampleType "RANDOM" .
     }
     ?article schema:about ?city ;

@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script>
+(function () {
+  try {
+    var saved = localStorage.getItem('urbanita-theme');
+    if (saved === 'light' || saved === 'dark') {
+      document.documentElement.setAttribute('data-theme', saved);
+    }
+  } catch (e) { /* storage unavailable */ }
+})();
+</script>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<title>About — Urbanita</title>
+<meta name="description" content="What Urbanita is, how it decides what counts as a city, and who built it.">
+
+<meta property="og:title" content="About — Urbanita">
+<meta property="og:description" content="What Urbanita is, how it decides what counts as a city, and who built it.">
+<meta property="og:type" content="website">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Young+Serif&family=Work+Sans:ital,wght@0,300..600;1,300..600&display=swap">
+
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<a class="skip-link" href="#main">Skip to content</a>
+
+<header class="site-header">
+  <nav class="site-nav" aria-label="Main">
+    <a class="wordmark" href="./">Urbanita</a>
+    <ul>
+      <li><a href="./">Cities</a></li>
+      <li><a href="about.html" aria-current="page">About</a></li>
+      <li><a href="blog/">Journal</a></li>
+    </ul>
+  </nav>
+</header>
+
+<main id="main">
+  <article class="prose">
+    <h1>About Urbanita</h1>
+    <p class="lede">
+      Urbanita is a small, personal city-lookup tool. Type a name, and it
+      pulls together a summary, the key facts, and a map &mdash; for places
+      that are actually cities.
+    </p>
+
+    <h2>What it does</h2>
+    <p>
+      Every search resolves an article on Wikipedia, then checks Wikidata to
+      confirm the result is a settlement &mdash; a city, town, village,
+      municipality, and so on &mdash; before showing it. If it isn&rsquo;t,
+      Urbanita says so and offers real alternatives instead of guessing.
+    </p>
+
+    <h2>How the city filter works</h2>
+    <p>
+      Rather than keeping a hardcoded list of cities, Urbanita asks Wikidata
+      what kind of thing an article is about (its <code>instance of</code>
+      claim), and if that doesn&rsquo;t directly match a known settlement
+      type, it walks <code>subclass of</code> upward a few hops. That&rsquo;s
+      how a &ldquo;commune of France&rdquo; or a &ldquo;city-state&rdquo;
+      resolve correctly without ever being listed by name. Coordinates alone
+      aren&rsquo;t enough &mdash; mountains have coordinates too.
+    </p>
+
+    <h2>No build step, no backend</h2>
+    <p>
+      The whole site is static files talking directly to the Wikipedia and
+      Wikidata APIs from your browser. No server, no database, nothing to
+      install to run it locally &mdash; which is exactly what a free static
+      host like GitHub Pages wants.
+    </p>
+
+    <h2>Built by</h2>
+    <p>
+      Vibe coded by Daniele Baldo &mdash; a city lover continuously trying
+      to find new ways to have fun around urban things.
+    </p>
+
+    <p>
+      Full credits for the data, map tiles, and fonts Urbanita relies on are
+      on the <a href="attribution.html">Attribution</a> page.
+    </p>
+  </article>
+</main>
+
+<footer class="site-footer">
+  <p>
+    City summaries from <a href="https://en.wikipedia.org" rel="noopener">Wikipedia</a>,
+    available under <a href="https://creativecommons.org/licenses/by-sa/4.0/" rel="noopener license">CC BY-SA 4.0</a>.
+  </p>
+  <p class="colophon">Urbanita &middot; set in Young Serif &amp; Work Sans &middot; <a href="attribution.html">Attribution</a></p>
+  <button type="button" id="theme-toggle" class="theme-toggle" aria-pressed="false"></button>
+</footer>
+
+<script type="module" src="js/theme.js"></script>
+</body>
+</html>

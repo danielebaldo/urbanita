@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script>
+/* Apply a saved light/dark choice before first paint, so there's no flash
+   of the wrong theme. Falls back to the OS preference (in CSS) if unset. */
+(function () {
+  try {
+    var saved = localStorage.getItem('urbanita-theme');
+    if (saved === 'light' || saved === 'dark') {
+      document.documentElement.setAttribute('data-theme', saved);
+    }
+  } catch (e) { /* storage unavailable */ }
+})();
+</script>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<title>Urbanita — Explore the world's cities</title>
+<meta name="description" content="Type the name of any city in the world and get a concise summary drawn from Wikipedia.">
+
+<meta property="og:title" content="Urbanita — Explore the world's cities">
+<meta property="og:description" content="Type the name of any city in the world and get a concise summary drawn from Wikipedia.">
+<meta property="og:type" content="website">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Young+Serif&family=Work+Sans:ital,wght@0,300..600;1,300..600&display=swap">
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+  integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<a class="skip-link" href="#main">Skip to content</a>
+
+<header class="site-header">
+  <nav class="site-nav" aria-label="Main">
+    <a class="wordmark" href="./">Urbanita</a>
+    <ul>
+      <li><a href="./" aria-current="page">Cities</a></li>
+      <li><a href="about.html">About</a></li>
+      <li><a href="blog/">Journal</a></li>
+    </ul>
+  </nav>
+</header>
+
+<main id="main">
+
+  <section class="hero">
+    <h1 class="hero-logo">Urbanita</h1>
+    <p class="lede">Every city has a story. Type a name and Urbanita pulls the essentials for you.</p>
+
+    <form id="search-form" role="search">
+      <label class="visually-hidden" for="city-input">City name</label>
+      <input
+        type="search"
+        id="city-input"
+        name="city"
+        placeholder="Lisbon, Kyoto, Valpara&iacute;so&hellip;"
+        autocomplete="off"
+        autocapitalize="words"
+        spellcheck="false"
+        required>
+      <button type="submit">Explore</button>
+    </form>
+
+    <div class="suggestions" id="suggestions">
+      <span class="suggestions-label">Try</span>
+      <button type="button" data-city="Lisbon">Lisbon</button>
+      <button type="button" data-city="Kyoto">Kyoto</button>
+      <button type="button" data-city="Valpara&iacute;so">Valpara&iacute;so</button>
+      <button type="button" data-city="Marrakesh">Marrakesh</button>
+      <button type="button" data-city="Tbilisi">Tbilisi</button>
+      <button type="button" data-city="Montevideo">Montevideo</button>
+    </div>
+  </section>
+
+  <section id="results" class="results" aria-live="polite" aria-busy="false"></section>
+
+</main>
+
+<footer class="site-footer">
+  <p>
+    City summaries from <a href="https://en.wikipedia.org" rel="noopener">Wikipedia</a>,
+    available under <a href="https://creativecommons.org/licenses/by-sa/4.0/" rel="noopener license">CC BY-SA 4.0</a>.
+  </p>
+  <p class="colophon">Urbanita &middot; set in Young Serif &amp; Work Sans &middot; <a href="attribution.html">Attribution</a></p>
+  <button type="button" id="theme-toggle" class="theme-toggle" aria-pressed="false"></button>
+</footer>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+  integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script type="module" src="js/theme.js"></script>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>

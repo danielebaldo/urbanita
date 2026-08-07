@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script>
+(function () {
+  try {
+    var saved = localStorage.getItem('urbanita-theme');
+    if (saved === 'light' || saved === 'dark') {
+      document.documentElement.setAttribute('data-theme', saved);
+    }
+  } catch (e) { /* storage unavailable */ }
+})();
+</script>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<title>Attribution — Urbanita</title>
+<meta name="description" content="Credits for the data, map tiles, libraries, and fonts Urbanita is built on.">
+
+<meta property="og:title" content="Attribution — Urbanita">
+<meta property="og:description" content="Credits for the data, map tiles, libraries, and fonts Urbanita is built on.">
+<meta property="og:type" content="website">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Young+Serif&family=Work+Sans:ital,wght@0,300..600;1,300..600&display=swap">
+
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<a class="skip-link" href="#main">Skip to content</a>
+
+<header class="site-header">
+  <nav class="site-nav" aria-label="Main">
+    <a class="wordmark" href="./">Urbanita</a>
+    <ul>
+      <li><a href="./">Cities</a></li>
+      <li><a href="about.html">About</a></li>
+      <li><a href="blog/">Journal</a></li>
+    </ul>
+  </nav>
+</header>
+
+<main id="main">
+  <article class="prose">
+    <h1>Attribution</h1>
+    <p class="lede">
+      Urbanita is built entirely on other people&rsquo;s open data, open
+      source software, and open fonts. Here&rsquo;s everything it relies on.
+    </p>
+
+    <h2>City content</h2>
+    <p>
+      Summaries, descriptions, and photographs come from
+      <a href="https://en.wikipedia.org" rel="noopener">Wikipedia</a>,
+      available under
+      <a href="https://creativecommons.org/licenses/by-sa/4.0/" rel="noopener license">CC BY-SA&nbsp;4.0</a>.
+      Every result links back to its source article. City classification
+      (deciding what actually counts as a city) is powered by
+      <a href="https://www.wikidata.org" rel="noopener">Wikidata</a>, also
+      available under
+      <a href="https://creativecommons.org/publicdomain/zero/1.0/" rel="noopener license">CC0</a>.
+    </p>
+
+    <h2>Map</h2>
+    <p>
+      Map tiles are
+      <a href="https://carto.com/basemaps" rel="noopener">CARTO Positron and Dark Matter</a>,
+      built on
+      <a href="https://www.openstreetmap.org/copyright" rel="noopener">OpenStreetMap</a>
+      data &copy; OpenStreetMap contributors. The map itself is rendered
+      with <a href="https://leafletjs.com" rel="noopener">Leaflet</a>, an
+      open-source JavaScript library available under the
+      <a href="https://github.com/Leaflet/Leaflet/blob/main/LICENSE" rel="noopener license">BSD-2-Clause license</a>.
+    </p>
+
+    <h2>Type</h2>
+    <p>
+      Set in <a href="https://fonts.google.com/specimen/Young+Serif" rel="noopener">Young Serif</a>
+      and <a href="https://fonts.google.com/specimen/Work+Sans" rel="noopener">Work Sans</a>,
+      both served by <a href="https://fonts.google.com" rel="noopener">Google Fonts</a>
+      under the
+      <a href="https://openfontlicense.org/" rel="noopener license">SIL Open Font License&nbsp;1.1</a>.
+    </p>
+  </article>
+</main>
+
+<footer class="site-footer">
+  <p>
+    City summaries from <a href="https://en.wikipedia.org" rel="noopener">Wikipedia</a>,
+    available under <a href="https://creativecommons.org/licenses/by-sa/4.0/" rel="noopener license">CC BY-SA 4.0</a>.
+  </p>
+  <p class="colophon">Urbanita &middot; set in Young Serif &amp; Work Sans &middot; <a href="attribution.html">Attribution</a></p>
+  <button type="button" id="theme-toggle" class="theme-toggle" aria-pressed="false"></button>
+</footer>
+
+<script type="module" src="js/theme.js"></script>
+</body>
+</html>

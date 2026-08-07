@@ -1,0 +1,601 @@
+/* ==========================================================================
+   Urbanita — design tokens
+   Warm editorial travel journal. Young Serif display, Work Sans body.
+   ========================================================================== */
+
+:root {
+  /* Light: warm sand paper */
+  --paper:      #faf8f5;
+  --card:       #fffdfa;
+  --ink:        #1f1c18;
+  --ink-soft:   #6b6257;
+  --terracotta: #b85c38;
+  --sage:       #7d8c6e;
+  --stone:      #e6e1d9;
+  --stone-deep: #d6cfc3;
+
+  --shadow-sm: 0 1px 2px rgba(31, 28, 24, .05);
+  --shadow-md: 0 4px 16px -4px rgba(31, 28, 24, .10),
+               0 1px 3px rgba(31, 28, 24, .05);
+
+  --radius:    14px;
+  --radius-sm: 9px;
+
+  --measure: 68ch;
+  --wrap: 760px;
+
+  --serif: "Young Serif", Georgia, "Times New Roman", serif;
+  --sans:  "Work Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  /* :not([data-theme="light"]) lets a manual override win over the OS. */
+  :root:not([data-theme="light"]) {
+    --paper:      #17150f;
+    --card:       #211e17;
+    --ink:        #f0ebe2;
+    --ink-soft:   #a89d8d;
+    --terracotta: #e08a63;
+    --sage:       #9aab89;
+    --stone:      #35301f;
+    --stone-deep: #453f2e;
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, .3);
+    --shadow-md: 0 4px 16px -4px rgba(0, 0, 0, .45),
+                 0 1px 3px rgba(0, 0, 0, .3);
+  }
+}
+
+/* Manual override (from the footer's light/dark switch) — wins regardless
+   of what the OS prefers, in both directions. */
+:root[data-theme="dark"] {
+  --paper:      #17150f;
+  --card:       #211e17;
+  --ink:        #f0ebe2;
+  --ink-soft:   #a89d8d;
+  --terracotta: #e08a63;
+  --sage:       #9aab89;
+  --stone:      #35301f;
+  --stone-deep: #453f2e;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, .3);
+  --shadow-md: 0 4px 16px -4px rgba(0, 0, 0, .45),
+               0 1px 3px rgba(0, 0, 0, .3);
+}
+
+/* ==========================================================================
+   Base
+   ========================================================================== */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 1.0625rem;
+  line-height: 1.65;
+  font-weight: 350;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+h1, h2, h3, .wordmark {
+  font-family: var(--serif);
+  font-weight: 400;      /* Young Serif ships one weight only */
+  line-height: 1.15;
+  letter-spacing: -0.005em;
+  margin: 0;
+}
+
+a { color: var(--terracotta); text-underline-offset: 2px; }
+a:hover { text-decoration-thickness: 2px; }
+
+img { max-width: 100%; height: auto; }
+
+:focus-visible {
+  outline: 2.5px solid var(--terracotta);
+  outline-offset: 3px;
+  border-radius: 3px;
+}
+
+.visually-hidden {
+  position: absolute; width: 1px; height: 1px;
+  padding: 0; margin: -1px; overflow: hidden;
+  clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+.skip-link {
+  position: absolute; left: -9999px;
+  background: var(--ink); color: var(--paper);
+  padding: .6rem 1rem; border-radius: 0 0 var(--radius-sm) 0;
+  z-index: 10; text-decoration: none;
+}
+.skip-link:focus { left: 0; top: 0; }
+
+/* ==========================================================================
+   Header
+   ========================================================================== */
+
+.site-header {
+  border-bottom: 1px solid var(--stone);
+}
+
+.site-nav {
+  max-width: var(--wrap);
+  margin: 0 auto;
+  padding: 1.15rem 1.5rem;
+  display: flex;
+  align-items: baseline;
+  gap: 1.5rem;
+}
+
+.wordmark {
+  font-size: 1.4rem;
+  color: var(--ink);
+  text-decoration: none;
+  letter-spacing: -0.015em;
+}
+
+.site-nav ul {
+  list-style: none;
+  display: flex;
+  gap: 1.35rem;
+  margin: 0 0 0 auto;
+  padding: 0;
+  font-size: .9rem;
+}
+
+.site-nav ul a {
+  color: var(--ink-soft);
+  text-decoration: none;
+}
+.site-nav ul a:hover { color: var(--terracotta); }
+
+/* ==========================================================================
+   Hero + search
+   ========================================================================== */
+
+main {
+  max-width: var(--wrap);
+  margin: 0 auto;
+  padding: 0 1.5rem 5rem;
+}
+
+.hero {
+  padding: 4.5rem 0 2.5rem;
+  text-align: center;
+}
+
+.hero-logo {
+  font-size: clamp(2.8rem, 8vw, 4.4rem);
+  letter-spacing: -0.02em;
+  margin-bottom: .6rem;
+}
+
+.lede {
+  color: var(--ink-soft);
+  font-size: 1.08rem;
+  margin: 0 auto 2.25rem;
+  max-width: 42ch;
+}
+
+#search-form {
+  display: flex;
+  gap: .55rem;
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+#city-input {
+  flex: 1;
+  min-width: 0;
+  font-family: inherit;
+  font-size: 1.02rem;
+  color: var(--ink);
+  padding: .85rem 1.1rem;
+  background: var(--card);
+  border: 1px solid var(--stone-deep);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-sm);
+  transition: border-color .15s ease;
+}
+#city-input::placeholder { color: var(--ink-soft); opacity: .75; }
+#city-input:hover { border-color: var(--ink-soft); }
+#city-input::-webkit-search-cancel-button { cursor: pointer; }
+
+#search-form button {
+  font-family: inherit;
+  font-size: 1rem;
+  font-weight: 500;
+  color: #fffdfa;
+  background: var(--terracotta);
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: .85rem 1.5rem;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: filter .15s ease, transform .1s ease;
+}
+#search-form button:hover { filter: brightness(1.08); }
+#search-form button:active { transform: translateY(1px); }
+#search-form button[disabled] { opacity: .55; cursor: progress; }
+
+/* Suggestion chips */
+
+.suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: .45rem;
+  margin-top: 1.5rem;
+}
+
+.suggestions-label {
+  font-size: .82rem;
+  color: var(--ink-soft);
+  margin-right: .15rem;
+}
+
+.suggestions button {
+  font-family: inherit;
+  font-size: .84rem;
+  color: var(--ink-soft);
+  background: transparent;
+  border: 1px solid var(--stone-deep);
+  border-radius: 999px;
+  padding: .3rem .8rem;
+  cursor: pointer;
+  transition: all .15s ease;
+}
+.suggestions button:hover {
+  color: var(--terracotta);
+  border-color: var(--terracotta);
+  background: var(--card);
+}
+
+/* ==========================================================================
+   Results
+   ========================================================================== */
+
+.results:empty { display: none; }
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--stone);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-md);
+  padding: 1.85rem;
+  animation: rise .35s cubic-bezier(.2, .7, .3, 1) both;
+}
+
+@keyframes rise {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card { animation: none; }
+  * { transition-duration: .01ms !important; }
+}
+
+.card-head { margin-bottom: 1.1rem; }
+
+.card h2 {
+  font-size: clamp(1.75rem, 4.5vw, 2.3rem);
+  margin-bottom: .2rem;
+}
+
+.card .description {
+  color: var(--sage);
+  font-size: .88rem;
+  font-weight: 500;
+  letter-spacing: .03em;
+  text-transform: uppercase;
+  margin: 0;
+}
+
+.card figure {
+  margin: 0 0 1.1rem;
+  float: right;
+  width: min(210px, 42%);
+  margin-left: 1.4rem;
+}
+
+.card figure img {
+  width: 100%;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--stone);
+  display: block;
+}
+
+.card .extract {
+  margin: 0;
+  max-width: var(--measure);
+}
+
+/* Key facts (population, country, area, elevation, timezone) */
+
+.facts {
+  clear: both;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 1rem 1.5rem;
+  margin: 1.5rem 0 0;
+  padding: 1.1rem 1.25rem;
+  background: var(--stone);
+  border-radius: var(--radius-sm);
+}
+
+.fact { margin: 0; }
+
+.fact dt {
+  font-size: .78rem;
+  color: var(--ink-soft);
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  margin: 0 0 .2rem;
+}
+
+.fact dd {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: 1.15rem;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Map */
+
+.map-container {
+  clear: both;
+  height: 260px;
+  margin-top: 1.5rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--stone);
+  overflow: hidden;
+  background: var(--stone);   /* visible neutral panel if Leaflet never attaches */
+}
+
+.map-container .leaflet-container {
+  font-family: var(--sans);
+}
+
+.card-meta {
+  clear: both;
+  margin-top: 1.5rem;
+  padding-top: 1.1rem;
+  border-top: 1px solid var(--stone);
+  display: flex;
+  flex-wrap: wrap;
+  gap: .4rem 1.25rem;
+  font-size: .86rem;
+  color: var(--ink-soft);
+}
+
+.card-meta .coords {
+  font-variant-numeric: tabular-nums;
+}
+
+/* States */
+
+.state {
+  text-align: center;
+  padding: 2.5rem 1rem;
+  color: var(--ink-soft);
+}
+
+.state h2 {
+  font-size: 1.4rem;
+  color: var(--ink);
+  margin-bottom: .4rem;
+}
+
+.state.error h2 { color: var(--terracotta); }
+
+.state p { margin: 0 auto; max-width: 42ch; }
+
+/* Loading skeleton */
+
+.skeleton {
+  background: var(--card);
+  border: 1px solid var(--stone);
+  border-radius: var(--radius);
+  padding: 1.85rem;
+}
+
+.skeleton span {
+  display: block;
+  height: .8rem;
+  border-radius: 4px;
+  background: linear-gradient(90deg, var(--stone) 25%, var(--stone-deep) 50%, var(--stone) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+  margin-bottom: .7rem;
+}
+
+.skeleton span:first-child { height: 2rem; width: 45%; margin-bottom: 1.4rem; }
+.skeleton span:nth-child(4) { width: 70%; }
+
+@keyframes shimmer {
+  from { background-position: 200% 0; }
+  to   { background-position: -200% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton span { animation: none; }
+}
+
+/* ==========================================================================
+   Footer
+   ========================================================================== */
+
+.site-footer {
+  border-top: 1px solid var(--stone);
+  padding: 2rem 1.5rem 3rem;
+  text-align: center;
+  font-size: .85rem;
+  color: var(--ink-soft);
+}
+
+.site-footer p { margin: 0 0 .4rem; }
+.site-footer .colophon { opacity: .7; font-size: .8rem; }
+
+.theme-toggle {
+  font-family: inherit;
+  font-size: .84rem;
+  color: var(--ink-soft);
+  background: transparent;
+  border: 1px solid var(--stone-deep);
+  border-radius: 999px;
+  padding: .35rem .9rem;
+  margin-top: 1.1rem;
+  cursor: pointer;
+  transition: all .15s ease;
+}
+.theme-toggle:hover {
+  color: var(--terracotta);
+  border-color: var(--terracotta);
+  background: var(--card);
+}
+
+/* ==========================================================================
+   Small screens
+   ========================================================================== */
+
+@media (max-width: 560px) {
+  .hero { padding-top: 3rem; }
+  .card { padding: 1.35rem; }
+  .card figure {
+    float: none;
+    width: 100%;
+    margin: 0 0 1.1rem;
+  }
+  .site-nav { gap: 1rem; }
+  .site-nav ul { gap: 1rem; }
+  .map-container { height: 200px; }
+}
+
+/* ==========================================================================
+   "Did you mean…?" options
+   ========================================================================== */
+
+.options-heading {
+  font-size: clamp(1.35rem, 3.5vw, 1.7rem);
+  margin-bottom: .35rem;
+}
+
+.options-message {
+  color: var(--ink-soft);
+  font-size: .93rem;
+  margin: 0 0 1.25rem;
+}
+
+ul.options {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+ul.options li {
+  padding: .7rem 0;
+  border-top: 1px solid var(--stone);
+}
+
+.option-link {
+  font-family: var(--serif);
+  font-size: 1.12rem;
+  color: var(--terracotta);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+  display: block;
+}
+.option-link:hover { text-decoration: underline; text-underline-offset: 3px; }
+
+.option-snippet {
+  display: block;
+  font-size: .86rem;
+  color: var(--ink-soft);
+  margin-top: .15rem;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+/* ==========================================================================
+   Prose pages (About, Attribution, Journal posts)
+   ========================================================================== */
+
+.prose {
+  max-width: var(--measure);
+  margin: 0 auto;
+  padding: 3.5rem 0 2rem;
+}
+
+.prose h1 {
+  font-size: clamp(2.2rem, 5.5vw, 3rem);
+  margin-bottom: 1.5rem;
+}
+
+.prose h2 {
+  font-size: 1.4rem;
+  margin: 2.25rem 0 .75rem;
+}
+
+.prose p, .prose ul, .prose ol {
+  margin: 0 0 1.15rem;
+}
+
+.prose ul, .prose ol { padding-left: 1.35rem; }
+.prose li { margin-bottom: .4rem; }
+
+.prose .lede {
+  margin: 0 0 2rem;
+  max-width: none;
+}
+
+.byline {
+  color: var(--ink-soft);
+  font-size: .9rem;
+  margin: -1rem 0 2rem;
+}
+
+/* Journal (blog) index */
+
+.post-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.post-list li {
+  padding: 1.35rem 0;
+  border-top: 1px solid var(--stone);
+}
+.post-list li:last-child { padding-bottom: 0; }
+
+.post-list time {
+  display: block;
+  font-size: .82rem;
+  color: var(--ink-soft);
+  margin-bottom: .3rem;
+}
+
+.post-list a {
+  font-family: var(--serif);
+  font-size: 1.3rem;
+  color: var(--ink);
+  text-decoration: none;
+}
+.post-list a:hover { color: var(--terracotta); }
+
+.post-list .excerpt {
+  margin: .35rem 0 0;
+  color: var(--ink-soft);
+}

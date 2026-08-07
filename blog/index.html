@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script>
+(function () {
+  try {
+    var saved = localStorage.getItem('urbanita-theme');
+    if (saved === 'light' || saved === 'dark') {
+      document.documentElement.setAttribute('data-theme', saved);
+    }
+  } catch (e) { /* storage unavailable */ }
+})();
+</script>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<title>Journal — Urbanita</title>
+<meta name="description" content="Notes on building Urbanita.">
+
+<meta property="og:title" content="Journal — Urbanita">
+<meta property="og:description" content="Notes on building Urbanita.">
+<meta property="og:type" content="website">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Young+Serif&family=Work+Sans:ital,wght@0,300..600;1,300..600&display=swap">
+
+<link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+
+<a class="skip-link" href="#main">Skip to content</a>
+
+<header class="site-header">
+  <nav class="site-nav" aria-label="Main">
+    <a class="wordmark" href="../">Urbanita</a>
+    <ul>
+      <li><a href="../">Cities</a></li>
+      <li><a href="../about.html">About</a></li>
+      <li><a href="./" aria-current="page">Journal</a></li>
+    </ul>
+  </nav>
+</header>
+
+<main id="main">
+  <article class="prose">
+    <h1>Journal</h1>
+    <p class="lede">Notes on building Urbanita, as it happens.</p>
+
+    <ul class="post-list">
+      <li>
+        <time datetime="2026-08-07">7 August 2026</time>
+        <a href="building-urbanita.html">Building Urbanita</a>
+        <p class="excerpt">
+          Why a city needs a Wikidata check, not just a search box &mdash;
+          and how the site grew from a summary card into facts and a map.
+        </p>
+      </li>
+    </ul>
+  </article>
+</main>
+
+<footer class="site-footer">
+  <p>
+    City summaries from <a href="https://en.wikipedia.org" rel="noopener">Wikipedia</a>,
+    available under <a href="https://creativecommons.org/licenses/by-sa/4.0/" rel="noopener license">CC BY-SA 4.0</a>.
+  </p>
+  <p class="colophon">Urbanita &middot; set in Young Serif &amp; Work Sans &middot; <a href="../attribution.html">Attribution</a></p>
+  <button type="button" id="theme-toggle" class="theme-toggle" aria-pressed="false"></button>
+</footer>
+
+<script type="module" src="../js/theme.js"></script>
+</body>
+</html>

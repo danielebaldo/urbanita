@@ -153,6 +153,13 @@ img { max-width: 100%; height: auto; }
 }
 .site-nav ul a:hover { color: var(--terracotta); }
 
+.site-nav--centered {
+  justify-content: center;
+}
+.site-nav--centered ul {
+  margin: 0;
+}
+
 /* ==========================================================================
    Hero + search
    ========================================================================== */

@@ -46,9 +46,7 @@
   <article class="prose">
     <h1>About Urbanita</h1>
     <p class="lede">
-      Urbanita is a small, personal city-lookup tool. Type a name, and it
-      pulls together a summary, the key facts, and a map &mdash; for places
-      that are actually cities.
+      Urbanita is a small, city-lookup tool and a personal blog by Daniele Baldo.
     </p>
 
     <h2>What it does</h2>
@@ -59,23 +57,10 @@
       Urbanita says so and offers real alternatives instead of guessing.
     </p>
 
-    <h2>How the city filter works</h2>
-    <p>
-      Rather than keeping a hardcoded list of cities, Urbanita asks Wikidata
-      what kind of thing an article is about (its <code>instance of</code>
-      claim), and if that doesn&rsquo;t directly match a known settlement
-      type, it walks <code>subclass of</code> upward a few hops. That&rsquo;s
-      how a &ldquo;commune of France&rdquo; or a &ldquo;city-state&rdquo;
-      resolve correctly without ever being listed by name. Coordinates alone
-      aren&rsquo;t enough &mdash; mountains have coordinates too.
-    </p>
-
     <h2>No build step, no backend</h2>
     <p>
       The whole site is static files talking directly to the Wikipedia and
-      Wikidata APIs from your browser. No server, no database, nothing to
-      install to run it locally &mdash; which is exactly what a free static
-      host like GitHub Pages wants.
+      Wikidata APIs from your browser. No server, no database.
     </p>
 
     <h2>Built by</h2>

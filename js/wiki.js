@@ -48,10 +48,11 @@ class HttpError extends Error {
 }
 export { HttpError };
 
-async function fetchJson(url, signal) {
+async function fetchJson(url, signal, fetchOptions) {
   const res = await fetch(url, {
     signal,
-    headers: { 'Accept': 'application/json', 'Api-User-Agent': API_USER_AGENT }
+    headers: { 'Accept': 'application/json', 'Api-User-Agent': API_USER_AGENT },
+    ...fetchOptions
   });
   if (!res.ok) throw new HttpError(res.status);
   return res.json();
@@ -257,8 +258,15 @@ export async function fetchRandomCityTitle(signal) {
              schema:isPartOf <https://en.wikipedia.org/> .
   }
   LIMIT 1`;
-  const url = WDQS + '?format=json&query=' + encodeURIComponent(query);
-  const data = await fetchJson(url, signal);
+
+  // WDQS marks its responses `Cache-Control: public, max-age=300`, and this
+  // query text never changes — without a cache-buster, browsers (and any
+  // proxy in between) would happily replay the exact same "random" city for
+  // five minutes straight. A per-request nonce keeps the URL unique; the
+  // param itself is meaningless to WDQS and doesn't affect the query.
+  const nonce = Math.random().toString(36).slice(2);
+  const url = WDQS + '?format=json&nonce=' + nonce + '&query=' + encodeURIComponent(query);
+  const data = await fetchJson(url, signal, { cache: 'no-store' });
   const binding = data.results && data.results.bindings && data.results.bindings[0];
   const articleUrl = binding && binding.article && binding.article.value;
   if (!articleUrl) return null;

@@ -6,6 +6,7 @@
 const WP_REST = 'https://en.wikipedia.org/api/rest_v1/page/summary/';
 const WP_API  = 'https://en.wikipedia.org/w/api.php';
 const WD_API  = 'https://www.wikidata.org/w/api.php';
+const WDQS    = 'https://query.wikidata.org/sparql';
 
 // Wikipedia asks browser clients to identify themselves with Api-User-Agent
 // (the real User-Agent header is locked down by browsers).
@@ -232,6 +233,32 @@ export async function fetchLabels(qids, signal) {
 
   list.forEach(id => out.set(id, labelCache.has(id) ? labelCache.get(id) : null));
   return out;
+}
+
+/**
+ * One random English Wikipedia article title for a Wikidata "city" (Q515).
+ * Uses WDQS's bd:sample service for cheap random sampling — no need to
+ * materialize or sort the (huge) full class. Returns null if the sampled
+ * entity happens to have no English sitelink, so the caller can retry.
+ */
+export async function fetchRandomCityTitle(signal) {
+  const query = `SELECT ?article WHERE {
+    SERVICE bd:sample {
+      ?city wdt:P31 wd:Q515 .
+      bd:serviceParam bd:sample.limit 1 .
+      bd:serviceParam bd:sample.sampleType "RANDOM" .
+    }
+    ?article schema:about ?city ;
+             schema:isPartOf <https://en.wikipedia.org/> .
+  }
+  LIMIT 1`;
+  const url = WDQS + '?format=json&query=' + encodeURIComponent(query);
+  const data = await fetchJson(url, signal);
+  const binding = data.results && data.results.bindings && data.results.bindings[0];
+  const articleUrl = binding && binding.article && binding.article.value;
+  if (!articleUrl) return null;
+  const title = decodeURIComponent(articleUrl.replace('https://en.wikipedia.org/wiki/', ''));
+  return title.replace(/_/g, ' ');
 }
 
 /* --------------------------------------------------------------------------

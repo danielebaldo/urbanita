@@ -515,6 +515,58 @@ group('20. A manual theme choice overrides the OS, in both directions');
 
 /* ========================================================================== */
 
+group('21. Random city button');
+{
+  const { els, loc } = await boot();
+  els['random-btn'].click();
+  await settle();
+  check('renders a city (default fixture: Lisbon)',
+    els['results'].textContent.includes('largest city of Portugal'), els['results'].textContent);
+  check('URL follows the random pick', loc.search === '?city=Lisbon', loc.search);
+  check('search box is cleared, not left showing a title', els['city-input'].value === '');
+}
+
+group('22. Random city retries past bad picks');
+{
+  const world = makeWorld();
+  // empty binding, WDQS hiccup, a non-city (rejected by resolveCity), then a hit.
+  world.randomQueue = [null, 'ERROR', 'Java', 'Lisbon'];
+  const { els } = await boot({ world });
+  els['random-btn'].click();
+  await settle();
+  check('eventually renders the first valid city',
+    els['results'].textContent.includes('largest city of Portugal'), els['results'].textContent);
+  check('does not surface the intermediate failures as an error',
+    !els['results'].textContent.includes('Something went wrong'));
+}
+
+group('23. Random city gives up after exhausting attempts');
+{
+  const world = makeWorld();
+  world.randomQueue = [null, null, null, null, null];   // RANDOM_ATTEMPTS = 5
+  const { els } = await boot({ world });
+  els['random-btn'].click();
+  await settle();
+  check('shows a dedicated error state',
+    els['results'].textContent.includes('Couldn’t find a random city'), els['results'].textContent);
+}
+
+group('24. Random city aborts an in-flight manual search');
+{
+  const world = makeWorld(); world.delay = 20;
+  const { els } = await boot({ world });
+  submit(els, 'Porto');
+  await tick(1);
+  els['random-btn'].click();
+  await new Promise(r => setTimeout(r, 120));
+  await settle();
+  const out = els['results'].textContent;
+  check('shows the random pick', out.includes('largest city of Portugal'), out);
+  check('stale Porto response discarded', !out.includes('Porto is a city'), out);
+}
+
+/* ========================================================================== */
+
 console.log('\n' + '-'.repeat(48));
 console.log(`  ${pass} passed, ${fail} failed`);
 console.log('-'.repeat(48));

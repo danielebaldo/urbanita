@@ -91,6 +91,7 @@ export function installDom({ search = '' } = {}) {
     'city-input': new Node('input'),
     'results': new Node('section'),
     'suggestions': new Node('div'),
+    'random-btn': new Node('button'),
     'theme-toggle': new Node('button')
   };
   els['city-input'].value = '';
@@ -254,6 +255,19 @@ function route(url, world) {
   const u = new URL(url);
 
   if (world.down && world.down.test(url)) throw new Error('network down');
+
+  /* WDQS — random city sampling. world.randomQueue is drained front-to-back,
+     one entry per fetchRandomCityTitle() call: a title string, null (sampled
+     entity had no enwiki article), or 'ERROR' (endpoint hiccup). Falls back
+     to world.randomCityTitle (default 'Lisbon') once the queue runs dry. */
+  if (u.hostname === 'query.wikidata.org') {
+    const queue = world.randomQueue || [];
+    const next = queue.length ? queue.shift() : (world.randomCityTitle ?? 'Lisbon');
+    if (next === 'ERROR') throw new Error('WDQS down');
+    if (next === null) return json({ results: { bindings: [] } });
+    const articleUrl = 'https://en.wikipedia.org/wiki/' + encodeURIComponent(next).replace(/%20/g, '_');
+    return json({ results: { bindings: [{ article: { value: articleUrl } }] } });
+  }
 
   /* REST summary */
   if (u.pathname.includes('/page/summary/')) {

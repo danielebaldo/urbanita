@@ -4,7 +4,8 @@
    ========================================================================== */
 
 import {
-  fetchSummary, searchTitles, classifyTitle, fetchFacts, filterToSettlements
+  fetchSummary, searchTitles, classifyTitle, fetchFacts, filterToSettlements,
+  fetchRandomCityTitle
 } from './wiki.js';
 
 import {
@@ -25,6 +26,9 @@ const input       = document.getElementById('city-input');
 const results     = document.getElementById('results');
 const suggestions = document.getElementById('suggestions');
 const submitBtn   = form.querySelector('button[type="submit"]');
+const randomBtn   = document.getElementById('random-btn');
+
+const RANDOM_ATTEMPTS = 5;
 
 let inFlight = null;
 const cache = new Map();      // normalised query -> { summary, facts }
@@ -58,6 +62,50 @@ function showCity(summary, facts) {
   else detachMap();
 }
 
+/**
+ * Resolve a query into a renderable city, or a typed failure reason.
+ * Pure orchestration over wiki.js — no DOM access, so it's reusable by
+ * both the normal search flow and the random-city picker.
+ */
+async function resolveCity(query, signal) {
+  let summary;
+  try {
+    summary = await fetchSummary(query, signal);
+  } catch (err) {
+    if (err.status === 404) return { ok: false, reason: 'not-found' };
+    throw err;
+  }
+
+  if (summary.type === 'disambiguation') {
+    return { ok: false, reason: 'disambiguation', summary };
+  }
+
+  /* --- Is it actually a city? ------------------------------------- */
+  let qid = null, verdict;
+  try {
+    ({ qid, isCity: verdict } = await classifyTitle(summary.title, signal));
+  } catch (err) {
+    if (err.name === 'AbortError') throw err;
+    verdict = null;                       // Wikidata unreachable
+  }
+
+  // null means "couldn't tell" — fall back to the weaker geographic
+  // signal rather than hiding a legitimate result.
+  const isCity = verdict === null ? Boolean(summary.coordinates) : verdict;
+  if (!isCity) return { ok: false, reason: 'not-a-city', summary };
+
+  /* --- Key facts (population, country, area, elevation, timezone) - */
+  let facts = null;
+  try {
+    facts = qid ? await fetchFacts(qid, signal) : null;
+  } catch (err) {
+    if (err.name === 'AbortError') throw err;
+    facts = null;                         // Wikidata down/partial: card still renders
+  }
+
+  return { ok: true, summary, facts };
+}
+
 async function lookup(rawQuery, { push = true } = {}) {
   const query = (rawQuery || '').trim();
   if (!query) return;
@@ -86,63 +134,33 @@ async function lookup(rawQuery, { push = true } = {}) {
   submitBtn.disabled = true;
 
   try {
-    let summary;
-    try {
-      summary = await fetchSummary(query, signal);
-    } catch (err) {
-      if (err.status === 404) {
+    const result = await resolveCity(query, signal);
+
+    if (!result.ok) {
+      if (result.reason === 'not-found') {
         await offerAlternatives(query, {
           heading: 'No article found',
           message: `Wikipedia has nothing under \u201C${query}\u201D.`,
           signal
         });
-        return;
+      } else if (result.reason === 'disambiguation') {
+        await offerAlternatives(query, {
+          heading: 'Several places share that name',
+          message: 'Pick the one you meant:',
+          signal
+        });
+      } else {
+        await offerAlternatives(query, {
+          heading: `\u201C${result.summary.title}\u201D doesn\u2019t look like a city`,
+          message: 'Urbanita only shows towns and cities. Did you mean one of these?',
+          signal
+        });
       }
-      throw err;
-    }
-
-    if (summary.type === 'disambiguation') {
-      await offerAlternatives(query, {
-        heading: 'Several places share that name',
-        message: 'Pick the one you meant:',
-        signal
-      });
       return;
     }
 
-    /* --- Is it actually a city? ------------------------------------- */
-    let qid = null, verdict;
-    try {
-      ({ qid, isCity: verdict } = await classifyTitle(summary.title, signal));
-    } catch (err) {
-      if (err.name === 'AbortError') throw err;
-      verdict = null;                       // Wikidata unreachable
-    }
-
-    // null means "couldn't tell" — fall back to the weaker geographic
-    // signal rather than hiding a legitimate result.
-    const isCity = verdict === null ? Boolean(summary.coordinates) : verdict;
-
-    if (!isCity) {
-      await offerAlternatives(query, {
-        heading: `\u201C${summary.title}\u201D doesn\u2019t look like a city`,
-        message: 'Urbanita only shows towns and cities. Did you mean one of these?',
-        signal
-      });
-      return;
-    }
-
-    /* --- Key facts (population, country, area, elevation, timezone) - */
-    let facts = null;
-    try {
-      facts = qid ? await fetchFacts(qid, signal) : null;
-    } catch (err) {
-      if (err.name === 'AbortError') throw err;
-      facts = null;                         // Wikidata down/partial: card still renders
-    }
-
-    cache.set(key, { summary, facts });
-    showCity(summary, facts);
+    cache.set(key, { summary: result.summary, facts: result.facts });
+    showCity(result.summary, result.facts);
 
   } catch (err) {
     if (err.name === 'AbortError') return;
@@ -155,6 +173,65 @@ async function lookup(rawQuery, { push = true } = {}) {
     if (inFlight === controller) {
       inFlight = null;
       submitBtn.disabled = false;
+    }
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Random city
+   -------------------------------------------------------------------------- */
+
+async function lookupRandom() {
+  if (inFlight) inFlight.abort();
+  const controller = new AbortController();
+  inFlight = controller;
+  const signal = controller.signal;
+
+  detachMap();
+  showSkeleton(results);
+  submitBtn.disabled = true;
+  randomBtn.disabled = true;
+
+  try {
+    for (let attempt = 0; attempt < RANDOM_ATTEMPTS; attempt++) {
+      let title;
+      try {
+        title = await fetchRandomCityTitle(signal);
+      } catch (err) {
+        if (err.name === 'AbortError') return;
+        continue;                         // WDQS hiccup — try again
+      }
+      if (!title) continue;               // sampled entity had no enwiki article
+
+      const result = await resolveCity(title, signal);
+      if (!result.ok) continue;           // stub/disambiguation/reclassified — try again
+
+      const key = title.toLowerCase();
+      cache.set(key, { summary: result.summary, facts: result.facts });
+      setUrl(result.summary.title);
+      input.value = '';
+      showCity(result.summary, result.facts);
+      return;
+    }
+
+    showState(results, {
+      heading: `Couldn’t find a random city`,
+      message: `Wikidata didn’t cooperate. Try again in a moment.`,
+      isError: true
+    });
+
+  } catch (err) {
+    if (err.name === 'AbortError') return;
+    showState(results, {
+      heading: 'Something went wrong',
+      message: `${err.message}. Check your connection and try again.`,
+      isError: true
+    });
+  } finally {
+    if (inFlight === controller) {
+      inFlight = null;
+      submitBtn.disabled = false;
+      randomBtn.disabled = false;
     }
   }
 }
@@ -212,6 +289,8 @@ suggestions.addEventListener('click', event => {
   const btn = event.target.closest('button[data-city]');
   if (btn) lookup(btn.getAttribute('data-city'));
 });
+
+randomBtn.addEventListener('click', () => lookupRandom());
 
 window.addEventListener('popstate', event => {
   const city = (event.state && event.state.city) || cityFromUrl();

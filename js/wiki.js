@@ -10,8 +10,7 @@ const WDQS    = 'https://query.wikidata.org/sparql';
 
 // Wikipedia asks browser clients to identify themselves with Api-User-Agent
 // (the real User-Agent header is locked down by browsers).
-// TODO: put your own repo or site URL here before going live.
-export const API_USER_AGENT = 'Urbanita/0.3 (https://github.com/danielebaldo/urbanita)';
+export const API_USER_AGENT = 'Urbanita/0.3 (https://urbanita.it)';
 
 /* --------------------------------------------------------------------------
    Wikidata classes that count as "a place someone would call a city".

@@ -83,11 +83,6 @@ Use a server, not `file://` — ES modules won't load from the filesystem.
 
 All paths are relative, so both naming schemes work unchanged.
 
-## Before going live
-
-Edit `API_USER_AGENT` at the top of `js/wiki.js` and put your own repo or site
-URL in it. Wikipedia asks API consumers to identify themselves.
-
 ## Tests
 
 ```sh

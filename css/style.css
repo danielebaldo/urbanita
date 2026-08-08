@@ -269,17 +269,18 @@ main {
   gap: .35rem;
   font-family: inherit;
   font-size: .84rem;
-  font-weight: 500;
-  color: var(--terracotta);
-  background: transparent;
+  font-weight: 600;
+  color: var(--card);
+  background: var(--terracotta);
   border: 1px solid var(--terracotta);
   border-radius: 999px;
   padding: .3rem .8rem;
+  box-shadow: var(--shadow-sm);
   cursor: pointer;
   transition: all .15s ease;
 }
 .random-btn svg { flex-shrink: 0; }
-.random-btn:hover { background: var(--card); filter: brightness(1.05); }
+.random-btn:hover { filter: brightness(1.08); box-shadow: var(--shadow-md); }
 .random-btn[disabled] { opacity: .55; cursor: progress; }
 
 /* ==========================================================================

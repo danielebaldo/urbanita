@@ -4,19 +4,24 @@
    ========================================================================== */
 
 :root {
-  /* Light: warm sand paper */
-  --paper:      #faf8f5;
-  --card:       #fffdfa;
-  --ink:        #1f1c18;
-  --ink-soft:   #6b6257;
+  /* Light: blush paper */
+  --paper:      #fdeeed;
+  --card:       #fff3f2;
+  --ink:        #27161e;
+  --ink-soft:   #726266;
   --terracotta: #b85c38;
-  --sage:       #7d8c6e;
-  --stone:      #e6e1d9;
-  --stone-deep: #d6cfc3;
+  --sage:       #419d78;
+  --stone:      #e3d4d4;
+  --stone-deep: #cebebf;
 
-  --shadow-sm: 0 1px 2px rgba(31, 28, 24, .05);
-  --shadow-md: 0 4px 16px -4px rgba(31, 28, 24, .10),
-               0 1px 3px rgba(31, 28, 24, .05);
+  /* Always #27161e, in both themes — for text set on a fixed-brightness
+     accent fill (the sage secondary button) where the flipping --ink
+     would lose contrast in dark mode. */
+  --ink-on-accent: #27161e;
+
+  --shadow-sm: 0 1px 2px rgba(39, 22, 30, .05);
+  --shadow-md: 0 4px 16px -4px rgba(39, 22, 30, .10),
+               0 1px 3px rgba(39, 22, 30, .05);
 
   --radius:    14px;
   --radius-sm: 9px;
@@ -31,14 +36,16 @@
 @media (prefers-color-scheme: dark) {
   /* :not([data-theme="light"]) lets a manual override win over the OS. */
   :root:not([data-theme="light"]) {
-    --paper:      #17150f;
-    --card:       #211e17;
-    --ink:        #f0ebe2;
-    --ink-soft:   #a89d8d;
+    --paper:      #27161e;
+    --card:       #311f26;
+    --ink:        #fdeeed;
+    --ink-soft:   #b2a2a5;
     --terracotta: #e08a63;
-    --sage:       #9aab89;
-    --stone:      #35301f;
-    --stone-deep: #453f2e;
+    /* --sage is intentionally unchanged: --ink-on-accent still clears
+       ~5:1 against it, and it reads at ~5:1 against dark paper too, so
+       it doesn't need a dark-mode variant. */
+    --stone:      #413037;
+    --stone-deep: #56464c;
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, .3);
     --shadow-md: 0 4px 16px -4px rgba(0, 0, 0, .45),
                  0 1px 3px rgba(0, 0, 0, .3);
@@ -48,14 +55,13 @@
 /* Manual override (from the footer's light/dark switch) — wins regardless
    of what the OS prefers, in both directions. */
 :root[data-theme="dark"] {
-  --paper:      #17150f;
-  --card:       #211e17;
-  --ink:        #f0ebe2;
-  --ink-soft:   #a89d8d;
+  --paper:      #27161e;
+  --card:       #311f26;
+  --ink:        #fdeeed;
+  --ink-soft:   #b2a2a5;
   --terracotta: #e08a63;
-  --sage:       #9aab89;
-  --stone:      #35301f;
-  --stone-deep: #453f2e;
+  --stone:      #413037;
+  --stone-deep: #56464c;
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, .3);
   --shadow-md: 0 4px 16px -4px rgba(0, 0, 0, .45),
                0 1px 3px rgba(0, 0, 0, .3);
@@ -176,10 +182,20 @@ main {
 }
 
 .hero-logo {
-  font-size: clamp(2.8rem, 8vw, 4.4rem);
-  letter-spacing: -0.02em;
-  margin-bottom: .6rem;
+  margin: 0 auto .6rem;
+  padding-bottom: 20px;
+  line-height: 0;   /* no inline-box gap under the svg */
 }
+
+.hero-logo svg {
+  width: clamp(210px, 55vw, 380px);
+  height: auto;
+}
+
+/* Theme-linked wordmark fills — same two colors as everywhere else,
+   so the logo flips with light/dark like the rest of the page. */
+.logo-ink    { fill: var(--ink); }
+.logo-accent { fill: var(--sage); }
 
 .lede {
   color: var(--ink-soft);
@@ -216,7 +232,7 @@ main {
   font-family: inherit;
   font-size: 1rem;
   font-weight: 500;
-  color: #fffdfa;
+  color: var(--card);
   background: var(--terracotta);
   border: none;
   border-radius: var(--radius-sm);
@@ -258,12 +274,12 @@ main {
   transition: all .15s ease;
 }
 .suggestions button:hover {
-  color: var(--terracotta);
-  border-color: var(--terracotta);
-  background: var(--card);
+  color: var(--ink-on-accent);
+  border-color: var(--sage);
+  background: var(--sage);
 }
 
-.random-btn {
+.suggestions .random-btn {
   display: inline-flex;
   align-items: center;
   gap: .35rem;
@@ -280,7 +296,7 @@ main {
   transition: all .15s ease;
 }
 .random-btn svg { flex-shrink: 0; }
-.random-btn:hover { filter: brightness(1.08); box-shadow: var(--shadow-md); }
+.suggestions .random-btn:hover { filter: brightness(1.08); box-shadow: var(--shadow-md); }
 .random-btn[disabled] { opacity: .55; cursor: progress; }
 
 /* ==========================================================================
@@ -316,7 +332,9 @@ main {
 }
 
 .card .description {
-  color: var(--sage);
+  /* Sage is reserved for accent fills (secondary buttons) — at this size
+     it doesn't clear text-contrast against the paper/card background. */
+  color: var(--ink-soft);
   font-size: .88rem;
   font-weight: 500;
   letter-spacing: .03em;

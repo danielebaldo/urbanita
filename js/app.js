@@ -14,7 +14,7 @@ import {
 
 import { attachMap, detachMap, refreshTheme } from './map.js';
 
-const SITE_NAME = 'Urbanita';
+const SITE_NAME = 'Urbanìta';
 const SEARCH_LIMIT = 10;
 
 // The footer's light/dark switch (js/theme.js) doesn't know the map
@@ -152,7 +152,7 @@ async function lookup(rawQuery, { push = true } = {}) {
       } else {
         await offerAlternatives(query, {
           heading: `\u201C${result.summary.title}\u201D doesn\u2019t look like a city`,
-          message: 'Urbanita only shows towns and cities. Did you mean one of these?',
+          message: 'Urbanìta only shows towns and cities. Did you mean one of these?',
           signal
         });
       }

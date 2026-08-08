@@ -37,8 +37,12 @@ const numberFormat = new Intl.NumberFormat('en-US');
 function renderFacts(facts) {
   if (!facts) return null;
 
+  const population = facts.population != null
+    ? numberFormat.format(facts.population) + (facts.populationYear ? ` (${facts.populationYear})` : '')
+    : null;
+
   const rows = [
-    ['Population', facts.population != null ? numberFormat.format(facts.population) : null],
+    ['Population', population],
     ['Country', facts.country || null],
     ['Area', facts.area ? `${numberFormat.format(facts.area.value)} ${facts.area.unit}` : null],
     ['Elevation', facts.elevation ? `${numberFormat.format(facts.elevation.value)} ${facts.elevation.unit}` : null],

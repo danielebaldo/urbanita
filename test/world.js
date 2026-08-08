@@ -109,6 +109,12 @@ export function makeWorld(overrides = {}) {
       Q1479: 254436      // Bordeaux
     },
 
+    /* population's `point in time` (P585) qualifier — Lisbon only, so
+       Bordeaux exercises the case of a population with no recorded year */
+    p1082Year: {
+      Q597: 2021
+    },
+
     /* area (P2046) — { amount, unit: Q-ID of the unit, or an unrecognized one } */
     p2046: {
       Q597:    { amount: 100.05, unit: 'Q712226' },  // Lisbon, km²

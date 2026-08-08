@@ -329,7 +329,7 @@ function route(url, world) {
       if (p421) claims.P421 = p421.map(v => statement(v));
 
       const pop = world.p1082?.[id];
-      if (pop !== undefined) claims.P1082 = [quantityStatement(pop, null)];
+      if (pop !== undefined) claims.P1082 = [quantityStatement(pop, null, world.p1082Year?.[id])];
 
       const area = world.p2046?.[id];
       if (area) claims.P2046 = [quantityStatement(area.amount, area.unit)];
@@ -350,13 +350,20 @@ function statement(v) {
   return { rank: 'normal', mainsnak: { snaktype: 'value', datavalue: { value: { id: v } } } };
 }
 
-function quantityStatement(amount, unitQid) {
+function quantityStatement(amount, unitQid, year) {
   const amountStr = (amount >= 0 ? '+' : '') + String(amount);
   const unit = unitQid ? `http://www.wikidata.org/entity/${unitQid}` : '1';
-  return {
+  const statement = {
     rank: 'normal',
     mainsnak: { snaktype: 'value', datavalue: { value: { amount: amountStr, unit } } }
   };
+  if (year !== undefined) {
+    statement.qualifiers = { P585: [{
+      snaktype: 'value',
+      datavalue: { value: { time: `+${year}-00-00T00:00:00Z` } }
+    }] };
+  }
+  return statement;
 }
 
 /* -------------------------------------------------------------------------- */

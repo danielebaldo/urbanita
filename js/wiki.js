@@ -185,31 +185,46 @@ function bestStatement(claims, prop) {
     s.mainsnak.snaktype === 'value' && s.mainsnak.datavalue
   );
   if (!usable.length) return null;
-  return (usable.find(s => s.rank === 'preferred') || usable[0]).mainsnak;
+  return usable.find(s => s.rank === 'preferred') || usable[0];
 }
 
 /** The single best entity-valued claim (e.g. P17 country, P421 timezone). */
 export function claimId(claims, prop) {
-  const snak = bestStatement(claims, prop);
-  const id = snak && snak.datavalue.value && snak.datavalue.value.id;
+  const statement = bestStatement(claims, prop);
+  const id = statement && statement.mainsnak.datavalue.value && statement.mainsnak.datavalue.value.id;
   return id || null;
+}
+
+/**
+ * The `point in time` (P585) qualifier on a statement, as a bare year —
+ * e.g. the year a population figure was recorded. Wikidata dates arrive as
+ * signed-year strings ("+2021-00-00T00:00:00Z"); null if there's no such
+ * qualifier or it doesn't parse.
+ */
+function qualifierYear(statement) {
+  const quals = statement && statement.qualifiers && statement.qualifiers.P585;
+  const snak = Array.isArray(quals) && quals.find(q => q && q.snaktype === 'value' && q.datavalue);
+  const time = snak && snak.datavalue.value && snak.datavalue.value.time;
+  const match = typeof time === 'string' && /^[+-](\d+)-/.exec(time);
+  return match ? Number(match[1]) : null;
 }
 
 /**
  * The single best quantity-valued claim (e.g. P1082 population,
  * P2046 area, P2044 elevation). Wikidata amounts arrive as signed strings
  * ("+506654"); unit is a bare "1" for dimensionless values or a full
- * entity URI, from which we keep only the trailing Q-ID.
+ * entity URI, from which we keep only the trailing Q-ID. `year` is the
+ * statement's `point in time` qualifier, if it has one.
  */
 export function claimQuantity(claims, prop) {
-  const snak = bestStatement(claims, prop);
-  const value = snak && snak.datavalue.value;
+  const statement = bestStatement(claims, prop);
+  const value = statement && statement.mainsnak.datavalue.value;
   if (!value || value.amount === undefined) return null;
   const amount = Number(value.amount);
   if (Number.isNaN(amount)) return null;
   const unit = value.unit;
   const unitQid = (unit && unit !== '1') ? unit.split('/').pop() : null;
-  return { amount, unitQid };
+  return { amount, unitQid, year: qualifierYear(statement) };
 }
 
 /** Batched, cached English labels for Wikidata entities (countries, timezones). */
@@ -436,7 +451,8 @@ export async function fetchFacts(qid, signal) {
   };
 
   return {
-    population: population ? Math.round(population.amount) : null,
+    population:     population ? Math.round(population.amount) : null,
+    populationYear: population ? population.year : null,
     country:    countryQid  ? (labels.get(countryQid)  || null) : null,
     area:       withUnit(area),
     elevation:  withUnit(elevation),

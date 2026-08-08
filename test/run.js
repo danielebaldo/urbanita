@@ -57,13 +57,21 @@ group('1. Pure helpers (wiki.js)');
   const claimsQty = { P1082: [
     { rank: 'deprecated', mainsnak: { snaktype: 'value', datavalue: { value: { amount: '+999', unit: '1' } } } },
     { rank: 'normal',     mainsnak: { snaktype: 'value', datavalue: { value: { amount: '+506654', unit: '1' } } } },
-    { rank: 'preferred',  mainsnak: { snaktype: 'value', datavalue: { value: { amount: '+520000', unit: '1' } } } }
+    { rank: 'preferred',  mainsnak: { snaktype: 'value', datavalue: { value: { amount: '+520000', unit: '1' } },
+      qualifiers: { P585: [{ snaktype: 'value', datavalue: { value: { time: '+2021-00-00T00:00:00Z' } } }] } } }
   ]};
   const qty = claimQuantity(claimsQty, 'P1082');
   check('claimQuantity prefers the preferred-rank statement', qty.amount === 520000, qty.amount);
   check('claimQuantity ignores deprecated statements over normal/preferred ones', qty.amount !== 999);
   check('claimQuantity treats unit "1" as dimensionless', qty.unitQid === null);
+  check('claimQuantity reads the point-in-time qualifier as a year', qty.year === 2021, qty.year);
   check('claimQuantity on missing property returns null', claimQuantity({}, 'P1082') === null);
+
+  const claimsQtyNoYear = { P1082: [
+    { rank: 'normal', mainsnak: { snaktype: 'value', datavalue: { value: { amount: '+254436', unit: '1' } } } }
+  ]};
+  check('claimQuantity year is null when there is no qualifier',
+    claimQuantity(claimsQtyNoYear, 'P1082').year === null);
 
   const claimsArea = { P2046: [
     { rank: 'normal', mainsnak: { snaktype: 'value', datavalue: {
@@ -142,6 +150,7 @@ group('4. Key facts (wiki.js)');
 
   const lisbon = await wiki.fetchFacts('Q597');
   check('population extracted', lisbon.population === 506654, lisbon.population);
+  check('population year extracted', lisbon.populationYear === 2021, lisbon.populationYear);
   check('country label resolved', lisbon.country === 'Portugal', lisbon.country);
   check('area value + unit resolved',
     lisbon.area && lisbon.area.value === 100.05 && lisbon.area.unit === 'km²',
@@ -154,13 +163,15 @@ group('4. Key facts (wiki.js)');
   wiki._resetCaches();
   const porto = await wiki.fetchFacts('Q36433');
   check('city with no Wikidata facts returns all fields null',
-    porto.population === null && porto.country === null && porto.area === null &&
-    porto.elevation === null && porto.timezone === null,
+    porto.population === null && porto.populationYear === null && porto.country === null &&
+    porto.area === null && porto.elevation === null && porto.timezone === null,
     JSON.stringify(porto));
 
   wiki._resetCaches();
   const bordeaux = await wiki.fetchFacts('Q1479');
   check('partial facts: population present', bordeaux.population === 254436, bordeaux.population);
+  check('partial facts: population year absent stays null (no qualifier in fixture)',
+    bordeaux.populationYear === null, bordeaux.populationYear);
   check('partial facts: country present', bordeaux.country === 'France', bordeaux.country);
   check('partial facts: timezone absent stays null', bordeaux.timezone === null, bordeaux.timezone);
 
@@ -265,7 +276,7 @@ group('10. Shareable ?city= URLs');
 
   check('URL updated', loc.search === '?city=Lisbon', loc.search);
   check('history entry pushed, not replaced', historyLog.at(-1).type === 'push');
-  check('document title updated', doc.title.startsWith('Lisbon \u2014 Urbanita'), doc.title);
+  check('document title updated', doc.title.startsWith('Lisbon \u2014 Urban\u00ecta'), doc.title);
 
   submit(els, 'Porto');
   await settle();
@@ -375,6 +386,8 @@ group('17. Full app boot — facts render');
   check('facts box renders for Lisbon', factsBoxes.length === 1);
   const factsText = factsBoxes[0].textContent;
   check('shows population formatted with thousands separator', factsText.includes('506,654'), factsText);
+  check('shows the population’s source year in parentheses',
+    factsText.includes('506,654 (2021)'), factsText);
   check('shows country', factsText.includes('Portugal'), factsText);
   check('shows area with unit', factsText.includes('100.05') && factsText.includes('km²'), factsText);
   check('shows elevation with unit', factsText.includes('2 m'), factsText);

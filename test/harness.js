@@ -342,6 +342,16 @@ function route(url, world) {
     return json({ entities });
   }
 
+  /* Urbanita's own news proxy (worker/news-proxy.js) — matched by its
+     distinctive `city` query param rather than by hostname, so the mock
+     keeps working once NEWS_PROXY_URL points at a real deployed Worker
+     instead of the placeholder. */
+  if (u.searchParams.has('city')) {
+    if (world.newsProxyDown) throw new Error('news proxy down');
+    const city = u.searchParams.get('city') || '';
+    return json({ articles: world.news?.[city] || [] });
+  }
+
   throw new Error('unrouted URL: ' + url);
 }
 

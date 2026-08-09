@@ -57,8 +57,8 @@ group('1. Pure helpers (wiki.js)');
   const claimsQty = { P1082: [
     { rank: 'deprecated', mainsnak: { snaktype: 'value', datavalue: { value: { amount: '+999', unit: '1' } } } },
     { rank: 'normal',     mainsnak: { snaktype: 'value', datavalue: { value: { amount: '+506654', unit: '1' } } } },
-    { rank: 'preferred',  mainsnak: { snaktype: 'value', datavalue: { value: { amount: '+520000', unit: '1' } },
-      qualifiers: { P585: [{ snaktype: 'value', datavalue: { value: { time: '+2021-00-00T00:00:00Z' } } }] } } }
+    { rank: 'preferred',  mainsnak: { snaktype: 'value', datavalue: { value: { amount: '+520000', unit: '1' } } },
+      qualifiers: { P585: [{ snaktype: 'value', datavalue: { value: { time: '+2021-00-00T00:00:00Z' } } }] } }
   ]};
   const qty = claimQuantity(claimsQty, 'P1082');
   check('claimQuantity prefers the preferred-rank statement', qty.amount === 520000, qty.amount);
@@ -571,11 +571,79 @@ group('24. Random city aborts an in-flight manual search');
   submit(els, 'Porto');
   await tick(1);
   els['random-btn'].click();
-  await new Promise(r => setTimeout(r, 120));
+  // The winning pick (Lisbon, via the random-queue fallback) resolves through
+  // more sequential legs than most fixtures — title, classify, facts labels,
+  // and now news — so needs more real-time headroom than a bare city lookup.
+  await new Promise(r => setTimeout(r, 220));
   await settle();
   const out = els['results'].textContent;
   check('shows the random pick', out.includes('largest city of Portugal'), out);
   check('stale Porto response discarded', !out.includes('Porto is a city'), out);
+}
+
+/* ========================================================================== */
+
+group('25. City news (proxy)');
+{
+  const world = makeWorld();
+  installDom(); const calls = installFetch(world);
+  const { fetchCityNews } = await import('../js/news.js');
+
+  const lisbon = await fetchCityNews('Lisbon', 'Portugal');
+  check('passes through the proxy’s articles unchanged',
+    lisbon.length === 2 && lisbon[0].title === 'Lisbon hosts a design festival',
+    JSON.stringify(lisbon));
+  check('calls the proxy with the city as a query param',
+    calls.some(u => u.includes('city=Lisbon')), JSON.stringify(calls));
+  check('calls the proxy with the country as a query param',
+    calls.some(u => u.includes('country=Portugal')), JSON.stringify(calls));
+
+  const bordeaux = await fetchCityNews('Bordeaux', 'France');
+  check('a fixture with zero articles yields an empty array, not an error',
+    Array.isArray(bordeaux) && bordeaux.length === 0);
+
+  const noFixture = await fetchCityNews('Nowhereville', null);
+  check('a city with no fixture entry also yields an empty array', noFixture.length === 0);
+}
+
+/* ========================================================================== */
+
+group('26. Full app boot — news renders');
+{
+  const { els } = await boot();
+  submit(els, 'Lisbon');
+  await settle();
+
+  const newsBoxes = els['results'].byClass('news');
+  check('news section renders for Lisbon', newsBoxes.length === 1);
+  const links = newsBoxes[0].findAll('a');
+  check('shows both fixture headlines', links.length === 2, links.length);
+  check('each headline links out to its own source article',
+    links.every(a => (a.getAttribute('href') || '').startsWith('http')),
+    JSON.stringify(links.map(a => a.getAttribute('href'))));
+  check('shows the source domain', newsBoxes[0].textContent.includes('example.com'),
+    newsBoxes[0].textContent);
+
+  submit(els, 'Bordeaux');
+  await settle();
+  check('no news section when there is no recent coverage (no empty box)',
+    els['results'].byClass('news').length === 0);
+}
+
+/* ========================================================================== */
+
+group('27. News proxy unreachable: degrade, do not block');
+{
+  const world = makeWorld();
+  world.newsProxyDown = true;
+  const { els } = await boot({ world });
+  submit(els, 'Lisbon');
+  await settle();
+  const out = els['results'].textContent;
+  check('city still shown when the news proxy is down', out.includes('largest city of Portugal'), out);
+  check('facts still shown when the news proxy is down', out.includes('506,654'), out);
+  check('no error state', !out.includes('Something went wrong'));
+  check('no news section rendered', els['results'].byClass('news').length === 0);
 }
 
 /* ========================================================================== */

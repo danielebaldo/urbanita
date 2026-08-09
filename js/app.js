@@ -8,6 +8,8 @@ import {
   fetchRandomCityTitle
 } from './wiki.js';
 
+import { fetchCityNews } from './news.js';
+
 import {
   showSkeleton, showState, renderCity, renderOptions
 } from './ui.js';
@@ -31,7 +33,7 @@ const randomBtn   = document.getElementById('random-btn');
 const RANDOM_ATTEMPTS = 5;
 
 let inFlight = null;
-const cache = new Map();      // normalised query -> { summary, facts }
+const cache = new Map();      // normalised query -> { summary, facts, news }
 
 /* --------------------------------------------------------------------------
    URL state — /?city=Lisbon
@@ -56,8 +58,8 @@ function cityFromUrl() {
    -------------------------------------------------------------------------- */
 
 /** Render the card and (re)attach its map, if it has coordinates. */
-function showCity(summary, facts) {
-  const { mapContainer } = renderCity(results, summary, { facts });
+function showCity(summary, facts, news) {
+  const { mapContainer } = renderCity(results, summary, { facts, news });
   if (mapContainer) attachMap(mapContainer, summary.coordinates);
   else detachMap();
 }
@@ -103,7 +105,16 @@ async function resolveCity(query, signal) {
     facts = null;                         // Wikidata down/partial: card still renders
   }
 
-  return { ok: true, summary, facts };
+  /* --- Fresh news (best-effort — most small towns will have none) - */
+  let news = [];
+  try {
+    news = await fetchCityNews(summary.title, facts?.country, signal);
+  } catch (err) {
+    if (err.name === 'AbortError') throw err;
+    news = [];                            // proxy down/empty: card still renders
+  }
+
+  return { ok: true, summary, facts, news };
 }
 
 async function lookup(rawQuery, { push = true } = {}) {
@@ -125,7 +136,7 @@ async function lookup(rawQuery, { push = true } = {}) {
   const key = query.toLowerCase();
   if (cache.has(key)) {
     const cached = cache.get(key);
-    showCity(cached.summary, cached.facts);
+    showCity(cached.summary, cached.facts, cached.news);
     inFlight = null;
     return;
   }
@@ -159,8 +170,8 @@ async function lookup(rawQuery, { push = true } = {}) {
       return;
     }
 
-    cache.set(key, { summary: result.summary, facts: result.facts });
-    showCity(result.summary, result.facts);
+    cache.set(key, { summary: result.summary, facts: result.facts, news: result.news });
+    showCity(result.summary, result.facts, result.news);
 
   } catch (err) {
     if (err.name === 'AbortError') return;
@@ -207,10 +218,10 @@ async function lookupRandom() {
       if (!result.ok) continue;           // stub/disambiguation/reclassified — try again
 
       const key = title.toLowerCase();
-      cache.set(key, { summary: result.summary, facts: result.facts });
+      cache.set(key, { summary: result.summary, facts: result.facts, news: result.news });
       setUrl(result.summary.title);
       input.value = '';
-      showCity(result.summary, result.facts);
+      showCity(result.summary, result.facts, result.news);
       return;
     }
 

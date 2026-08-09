@@ -28,6 +28,7 @@ export function formatCoords({ lat, lon }) {
 }
 
 const numberFormat = new Intl.NumberFormat('en-US');
+const newsDateFormat = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 
 /**
  * Population / country / area / elevation / timezone, as a definition-list
@@ -61,6 +62,36 @@ function renderFacts(facts) {
   return dl;
 }
 
+/**
+ * A handful of recent headlines mentioning the city, newest first. Empty
+ * or missing news is expected (most small towns won't have any recent
+ * English coverage) — no box is rendered rather than an empty one.
+ */
+function renderNews(news) {
+  if (!news || !news.length) return null;
+
+  const list = el('ul', { class: 'news-list' });
+  news.forEach(item => {
+    const link = el('a', {
+      href: item.url, target: '_blank', rel: 'noopener', text: item.title
+    });
+    const metaParts = [item.domain];
+    if (item.publishedAt) {
+      const date = new Date(item.publishedAt);
+      if (!Number.isNaN(date.getTime())) metaParts.push(newsDateFormat.format(date));
+    }
+    list.appendChild(el('li', null, [
+      link,
+      el('span', { class: 'news-meta', text: metaParts.join(' · ') })
+    ]));
+  });
+
+  return el('div', { class: 'news' }, [
+    el('h3', { class: 'news-heading', text: 'In the news' }),
+    list
+  ]);
+}
+
 /* -------------------------------------------------------------------------- */
 
 export function showSkeleton(container) {
@@ -85,7 +116,7 @@ export function showState(container, { heading, message, isError }) {
 
 /* -------------------------------------------------------------------------- */
 
-export function renderCity(container, data, { facts = null } = {}) {
+export function renderCity(container, data, { facts = null, news = [] } = {}) {
   clear(container);
   container.setAttribute('aria-busy', 'false');
 
@@ -116,6 +147,9 @@ export function renderCity(container, data, { facts = null } = {}) {
 
   const factsBox = renderFacts(facts);
   if (factsBox) card.appendChild(factsBox);
+
+  const newsBox = renderNews(news);
+  if (newsBox) card.appendChild(newsBox);
 
   const meta = el('div', { class: 'card-meta' });
 

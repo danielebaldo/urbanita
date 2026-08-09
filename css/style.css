@@ -392,6 +392,51 @@ main {
   font-variant-numeric: tabular-nums;
 }
 
+/* News */
+
+.news {
+  clear: both;
+  margin: 1.5rem 0 0;
+}
+
+.news-heading {
+  font-size: .78rem;
+  color: var(--ink-soft);
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  margin: 0 0 .6rem;
+}
+
+.news-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: .65rem;
+}
+
+.news-list li {
+  padding-bottom: .65rem;
+  border-bottom: 1px solid var(--stone);
+}
+.news-list li:last-child { border-bottom: none; padding-bottom: 0; }
+
+.news-list a {
+  display: block;
+  color: var(--ink);
+  font-weight: 500;
+  text-decoration: none;
+}
+.news-list a:hover { color: var(--terracotta); text-decoration: underline; }
+
+.news-meta {
+  display: block;
+  margin-top: .2rem;
+  font-size: .8rem;
+  color: var(--ink-soft);
+}
+
 /* Map */
 
 .map-container {

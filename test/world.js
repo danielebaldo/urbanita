@@ -133,6 +133,22 @@ export function makeWorld(overrides = {}) {
       Q6072: 'Western European Time'
     },
 
+    /* News proxy results, keyed by city — see harness.js's route(). Already
+       in the proxy's own response shape (title/url/domain/publishedAt):
+       the real worker (worker/news-proxy.js) owns fetching Currents API,
+       normalizing, and de-duplicating, so this suite fixtures its output
+       rather than Currents' raw response. Lisbon has two; Bordeaux has
+       none (exercises the "no recent coverage" empty state). */
+    news: {
+      Lisbon: [
+        { title: 'Lisbon hosts a design festival', url: 'https://example.com/a',
+          domain: 'example.com', publishedAt: '2026-08-01T12:00:00Z' },
+        { title: 'A second Lisbon story', url: 'https://other.example/b',
+          domain: 'other.example', publishedAt: '2026-07-31T09:00:00Z' }
+      ],
+      Bordeaux: []
+    },
+
     ...overrides
   };
 }

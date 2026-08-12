@@ -1,5 +1,5 @@
 import {
-  installDom, installFetch, tick, loadApp, installFakeLeaflet, installFakeMatchMedia
+  installDom, installFetch, tick, loadApp, installFakeMapLibre, installFakeMatchMedia
 } from './harness.js';
 import { makeWorld } from './world.js';
 
@@ -397,8 +397,6 @@ group('17. Full app boot — facts render');
   await settle();
   check('no facts box when Wikidata has no claims for the city',
     els['results'].byClass('facts').length === 0);
-  check('map container still renders (coordinates are independent of facts)',
-    els['results'].byClass('map-container').length === 1);
 
   submit(els, 'Bordeaux');
   await settle();
@@ -415,59 +413,77 @@ group('17. Full app boot — facts render');
 
 group('18. Map lifecycle');
 {
-  /* No Leaflet loaded: container renders, nothing throws. */
+  /* No MapLibre loaded: the map init is a no-op, nothing throws, search
+     still works. */
   const { els } = await boot();
   submit(els, 'Lisbon');
   await settle();
-  check('map container renders even without Leaflet loaded',
-    els['results'].byClass('map-container').length === 1);
+  check('search still resolves fine even without MapLibre loaded',
+    els['results'].byClass('card').length === 1);
 
-  /* With a fake Leaflet: instances are created and torn down across renders. */
+  /* With a fake MapLibre: hidden and uncreated until the first search with
+     coordinates, then one persistent instance for the rest of the session —
+     later searches fly its camera rather than creating/tearing down instances. */
   const world = makeWorld();
   const dom = installDom();
-  const leafletInstances = installFakeLeaflet();
-  const media = installFakeMatchMedia(false);
+  const mapInstances = installFakeMapLibre();
   installFetch(world);
   await loadApp();
   const els2 = dom.els;
+  const mapSection = els2['map-section'];
+
+  check('no map instance exists before any search', mapInstances.length === 0);
+  check('map section starts hidden', mapSection.className === 'map-section');
 
   submit(els2, 'Lisbon');
   await settle();
-  check('first search creates a map instance', leafletInstances.length === 1);
-  check('first instance is not removed', leafletInstances[0].removed === false);
+  check('first search with coordinates creates the map, once', mapInstances.length === 1);
+  check('map section is revealed', mapSection.className === 'map-section is-visible');
+  const map = mapInstances[0];
+  check('search flies the camera to the city, as [lon, lat]',
+    map.flights.length === 1 &&
+    map.flights[0].center[0] === -9.1393 && map.flights[0].center[1] === 38.7223,
+    JSON.stringify(map.flights[0]));
+
+  /* A "still filling in" cue tracks MapLibre's own movestart/idle events,
+     not a guessed timeout. */
+  map.fire('movestart');
+  check('camera movement flags the tile container as loading',
+    els2['map'].className === 'is-loading');
+  map.fire('idle');
+  check('idle (camera stopped + tiles rendered) clears it',
+    els2['map'].className === '');
 
   submit(els2, 'Porto');
   await settle();
-  check('second search creates a second instance', leafletInstances.length === 2);
-  check('first instance is torn down when replaced', leafletInstances[0].removed === true);
-  check('second instance is left alive', leafletInstances[1].removed === false);
+  check('a second search flies the same map again',
+    map.flights.length === 2 &&
+    map.flights[1].center[0] === -8.6291 && map.flights[1].center[1] === 41.1579);
+  check('no second map instance was created', mapInstances.length === 1);
 
   submit(els2, 'Lisbon');   // cache hit
   await settle();
-  check('cache-hit re-render creates a fresh map instance without a new claims fetch',
-    leafletInstances.length === 3 && leafletInstances[1].removed === true);
+  check('cache-hit re-render flies the map again, without a new claims fetch',
+    map.flights.length === 3);
 
   dom.win.dispatch('popstate', { state: { city: 'Porto' } });
   await settle();
-  check('back button reattaches a map for the restored city',
-    leafletInstances.length === 4 && leafletInstances[2].removed === true);
+  check('back button flies the map to the restored city', map.flights.length === 4);
 
-  check('a theme-change listener was registered for the live map', media.listenerCount() === 1);
-  media.setDark(true);
-  check('flipping the OS theme does not throw or remove the live map',
-    leafletInstances[3].removed === false);
+  dom.loc.search = '';   // mimics the URL bar having already reverted to "/"
+  dom.win.dispatch('popstate', { state: { city: null } });
+  await settle();
+  check('clearing back to the home state hides the map again',
+    mapSection.className === 'map-section');
 }
 
 /* ========================================================================== */
 
 group('19. Light/dark switch');
 {
-  const world = makeWorld();
   const dom = installDom();
-  const leafletInstances = installFakeLeaflet();
   installFakeMatchMedia(false);   // OS prefers light
-  installFetch(world);
-  await loadApp();
+  await import('../js/theme.js?v=grp19');
   const els = dom.els;
   const toggle = els['theme-toggle'];
 
@@ -475,55 +491,41 @@ group('19. Light/dark switch');
     toggle.getAttribute('aria-pressed') === 'false' && toggle.textContent.includes('Dark'),
     toggle.textContent);
 
-  submit(els, 'Lisbon');
-  await settle();
-  check('map attaches with light tiles, matching the OS',
-    leafletInstances[0].tileUrl.includes('light_all'), leafletInstances[0].tileUrl);
-
   toggle.click();
   check('data-theme set to dark', dom.doc.documentElement.dataset.theme === 'dark');
   check('persisted to localStorage', dom.localStorage.getItem('urbanita-theme') === 'dark');
   check('button flips: pressed, now offers light',
     toggle.getAttribute('aria-pressed') === 'true' && toggle.textContent.includes('Light'),
     toggle.textContent);
-  check('the live map swaps to dark tiles immediately',
-    leafletInstances[0].tileUrl.includes('dark_all'), leafletInstances[0].tileUrl);
 
   toggle.click();
   check('toggling back sets light', dom.doc.documentElement.dataset.theme === 'light');
   check('persisted', dom.localStorage.getItem('urbanita-theme') === 'light');
-  check('the live map swaps back to light tiles',
-    leafletInstances[0].tileUrl.includes('light_all'), leafletInstances[0].tileUrl);
 }
 
 /* ========================================================================== */
 
 group('20. A manual theme choice overrides the OS, in both directions');
 {
-  const world = makeWorld();
   const dom = installDom();
-  const leafletInstances = installFakeLeaflet();
   const media = installFakeMatchMedia(true);   // OS prefers dark
-  installFetch(world);
-  await loadApp();
+  const theme = await import('../js/theme.js?v=grp20');
   const els = dom.els;
 
-  submit(els, 'Lisbon');
-  await settle();
-  check('OS dark: map defaults to dark tiles',
-    leafletInstances[0].tileUrl.includes('dark_all'), leafletInstances[0].tileUrl);
+  check('OS dark, no manual choice: effective theme is dark',
+    theme.effectiveTheme() === 'dark');
 
   els['theme-toggle'].click();   // force light despite the OS being dark
   check('forcing light overrides an OS set to dark',
-    leafletInstances[0].tileUrl.includes('light_all'), leafletInstances[0].tileUrl);
+    theme.effectiveTheme() === 'light');
 
   media.setDark(false);
   check('OS flipping to light while already forced light: stays light',
-    leafletInstances[0].tileUrl.includes('light_all'), leafletInstances[0].tileUrl);
+    theme.effectiveTheme() === 'light');
 
   media.setDark(true);
   check('OS flipping back to dark does not override the manual light choice',
-    leafletInstances[0].tileUrl.includes('light_all'), leafletInstances[0].tileUrl);
+    theme.effectiveTheme() === 'light');
 }
 
 /* ========================================================================== */

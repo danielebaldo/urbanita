@@ -1,8 +1,8 @@
 /* ==========================================================================
    Urbanita — light/dark switch
    Owns the toggle button: persists the choice, sets the <html> attribute
-   the CSS keys off, and tells anyone else interested (the map) that the
-   theme changed, without needing to know they exist.
+   the CSS keys off, and tells anyone else interested that the theme
+   changed, without needing to know they exist.
    ========================================================================== */
 
 const STORAGE_KEY = 'urbanita-theme';

@@ -4,10 +4,10 @@ A personal site with a city lookup tool. Type any city name, get a summary
 pulled live from Wikipedia — and only for places that are actually cities.
 
 No build step. Static files, which is exactly what GitHub Pages wants — the
-one dependency, Leaflet, loads from a CDN with no install step. The one
-exception is news: it goes through a small serverless proxy (see "How city
-news works" below) rather than being called directly from the browser, to
-keep an API key private and results cached.
+one dependency, MapLibre GL JS, loads from a CDN with no install step. The
+one exception is news: it goes through a small serverless proxy (see "How
+city news works" below) rather than being called directly from the browser,
+to keep an API key private and results cached.
 
 ## Status
 
@@ -18,7 +18,8 @@ Milestones 1–7 complete.
 - [x] 3. Shareable `?city=` URLs, back-button support
 - [x] 2.5 City-only filtering via Wikidata `instance of`
 - [x] 4. Wikidata infobox (population, country, area, elevation, timezone)
-- [x] 5. Leaflet map (CARTO Positron/Dark Matter tiles, follows the site theme)
+- [x] 5. MapLibre map (custom OpenFreeMap style, full-width strip pinned to
+      the bottom of the page; flies to each searched city)
 - [x] 6. About page, blog, attribution page
 - [x] 7. Fresh news per city (Currents API, via a small caching proxy)
 
@@ -37,7 +38,8 @@ css/style.css                 design tokens and layout
 js/wiki.js                    Wikipedia + Wikidata calls, city classification (no DOM)
 js/news.js                    thin client for the news proxy, per city (no DOM)
 js/ui.js                      rendering (no network)
-js/map.js                     Leaflet map lifecycle (the one third-party global)
+js/map.js                     MapLibre map lifecycle (the one third-party global)
+js/map-style.json             custom OpenFreeMap/MapLibre style
 js/theme.js                   light/dark switch (every page)
 js/app.js                     wiring, URL state (index.html only)
 worker/news-proxy.js          Cloudflare Worker: Currents API key, cache, CORS (deployed separately)
@@ -209,17 +211,18 @@ All paths are relative, so both naming schemes work unchanged.
 node test/run.js
 ```
 
-136 assertions, no npm install. Covers classification (including the subclass
+130 assertions, no npm install. Covers classification (including the subclass
 walk and the batching/caching behaviour), key facts (population, country,
 area, elevation, timezone — including partial/missing data and the
 entity-claims cache reuse), city news (the proxy client's request shape and
 pass-through of results, and rendering/omitting the news section), map
-lifecycle (attach/detach across searches, cache hits, back button,
-dark-mode tile swap), the light/dark switch (including that a manual
-choice overrides the OS in both directions), disambiguation, URL state, the
-back button, request cancellation, XSS safety, and graceful degradation
-when Wikidata or the news proxy is unreachable. The Worker itself
-(`worker/news-proxy.js`) is verified manually — see its Known Limits above.
+lifecycle (a single persistent instance created once, flown to each
+searched/cached/back-button city rather than recreated), the light/dark
+switch (including that a manual choice overrides the OS in both
+directions), disambiguation, URL state, the back button, request
+cancellation, XSS safety, and graceful degradation when Wikidata or the
+news proxy is unreachable. The Worker itself (`worker/news-proxy.js`) is
+verified manually — see its Known Limits above.
 
 ## Attribution
 
@@ -227,5 +230,5 @@ City content comes from Wikipedia and is licensed
 [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/).
 Every result links back to its source article. News headlines come from
 the Currents API and link back to the original publisher. Full credits
-(Wikidata, Currents, map tiles, Leaflet, fonts) are on the site's own
+(Wikidata, Currents, map tiles, MapLibre, fonts) are on the site's own
 `attribution.html`.

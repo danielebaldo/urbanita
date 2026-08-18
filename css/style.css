@@ -1044,8 +1044,11 @@ ul.options li {
   color: var(--ink-soft);
 }
 
-/* Journal with nothing published yet — the .post-list rules above are kept
-   for when there is. */
+/* The empty-journal line disappears as soon as the list has a post in it.
+   The empty <ul> has to stay in the markup regardless: scripts/publish-post.js
+   finds it by `<ul class="post-list">` to insert new entries. */
+.post-list:has(li) + .post-empty { display: none; }
+
 .post-empty {
   color: var(--ink-soft);
   font-style: italic;

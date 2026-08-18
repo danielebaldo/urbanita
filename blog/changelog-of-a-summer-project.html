@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script>
+(function () {
+  try {
+    var saved = localStorage.getItem('urbanita-theme');
+    if (saved === 'light' || saved === 'dark') {
+      document.documentElement.setAttribute('data-theme', saved);
+    }
+  } catch (e) { /* storage unavailable */ }
+})();
+</script>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<title>Changelog of a Summer project — Urbanìta</title>
+<meta name="description" content="The road towards a complete urbanite tool">
+
+<meta property="og:title" content="Changelog of a Summer project">
+<meta property="og:description" content="The road towards a complete urbanite tool">
+<meta property="og:type" content="article">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Young+Serif&family=Work+Sans:ital,wght@0,300..600;1,300..600&display=swap">
+
+<link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+
+<a class="skip-link" href="#main">Skip to content</a>
+
+<header class="site-header">
+  <nav class="site-nav" aria-label="Main">
+    <a class="wordmark" href="../">Urbanìta</a>
+    <ul>
+      <li><a href="../">Cities</a></li>
+      <li><a href="../about.html">About</a></li>
+      <li><a href="./" aria-current="page">Journal</a></li>
+    </ul>
+  </nav>
+</header>
+
+<main id="main">
+  <article class="prose">
+    <h1>Changelog of a Summer project</h1>
+    <p class="byline"><time datetime="2026-08-18">18 August 2026</time></p>
+
+    <h2>0.1 — 7th August 2026</h2>
+
+    <p>
+      The idea of a city lookup tool appears in my mind, it's time to make use of that domain you bought too long ago. With some effort and some AI-assisted vibe coding, the Wikidata lookup is up and running, with a small menu and a blog section.
+    </p>
+
+    <h2>0.2 — 8th August 2026</h2>
+
+    <p>
+      The randomizer becomes a &quot;Surprise me&quot; button. The funniest thing so far — endless exploration of world cities!
+    </p>
+
+    <h2>0.3 — 10th August 2026</h2>
+
+    <p>
+      The idea of providing news articles – ideally related to urbanism, design, architecture – lands on an easily accessible news API. Some articles are more adherent to the chosen criteria than others, but the whole concept was to being able to see if something is happening now — a starting point.
+    </p>
+
+    <h2>0.4 — 17th August 2026</h2>
+
+    <p>
+      The layout is adjusted for better clarity, with the data sections clearly separated.
+    </p>
+
+    <h2>0.5 — 18th August 2026</h2>
+
+    <p>
+      The biggest changes. A movie section appears (thank you Edo), with the same Wikidata workflow showing most popular movies filmed in or related to the city. The &quot;city name in the film title&quot; criteria is abandoned as it seldom works for most cities.
+    </p>
+
+    <h2>Next up</h2>
+
+    <ul>
+      <li>prominent figures born in the City from the architecture, design, ecology, sociology fields</li>
+      <li>a random trivia about the City section (thanks Edo x2!)</li>
+      <li>most associated word to the City on a web search</li>
+    </ul>
+  </article>
+</main>
+
+<footer class="site-footer">
+  <p>
+    City summaries from <a href="https://en.wikipedia.org" rel="noopener">Wikipedia</a>,
+    available under <a href="https://creativecommons.org/licenses/by-sa/4.0/" rel="noopener license">CC BY-SA 4.0</a>.
+  </p>
+  <p class="colophon">Urbanìta &middot; set in Young Serif &amp; Work Sans &middot; <a href="../attribution.html">Attribution</a></p>
+  <button type="button" id="theme-toggle" class="theme-toggle" aria-pressed="false"></button>
+</footer>
+
+<script type="module" src="../js/theme.js"></script>
+</body>
+</html>

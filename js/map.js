@@ -27,23 +27,67 @@ const TILES = {
    clicks and keep working. */
 const TILTED = '(min-width: 1200px)';
 
+/* Below that breakpoint the map is a full-width band in the middle of a
+   scrolling page. Leaflet's one-finger drag swallows the swipe that starts
+   on the tiles, so a reader trying to scroll past the map pans it instead
+   and gets stuck — the touch version of the trap `scrollWheelZoom: false`
+   already avoids with a wheel. So on a touch device the map takes two
+   fingers: `touchZoom` moves the centre as it scales, which pans and zooms
+   in one gesture, and the +/- buttons are ordinary taps either way. */
+const TOUCH = '(pointer: coarse)';
+
 /** Interactions that map a screen point to a lat/lng — unusable when tilted. */
 const POINTER_HANDLERS = ['dragging', 'doubleClickZoom', 'touchZoom'];
 
-let current = null;   // { map, tileLayer, mql, mqlListener, tiltMql, tiltListener } | null
+let current = null;   // { map, tileLayer, watchers } | null
 
-function isTilted() {
+function matches(query) {
   return typeof window !== 'undefined' && typeof window.matchMedia === 'function' &&
-    window.matchMedia(TILTED).matches;
+    window.matchMedia(query).matches;
 }
 
-function setPointerHandlers(map, enabled) {
-  POINTER_HANDLERS.forEach(name => {
+function isTilted() { return matches(TILTED); }
+function isTouch()  { return matches(TOUCH); }
+
+function setHandlers(map, names, enabled) {
+  names.forEach(name => {
     const handler = map[name];
     if (!handler) return;                  // option was never enabled
     if (enabled) handler.enable();
     else handler.disable();
   });
+}
+
+/**
+ * Point the map's interactions at whatever kind of screen it's on now.
+ * Tilted: nothing pointer-driven, Leaflet can't do rotation. Touch: no
+ * one-finger drag, so a swipe still scrolls the page. Otherwise: all of it.
+ * Re-run rather than toggled, so resizing across the breakpoint can't strand
+ * a handler at the value the other rule wanted.
+ */
+function applyInteractionPolicy(map) {
+  const tilted = isTilted();
+  setHandlers(map, POINTER_HANDLERS, !tilted);
+  if (!tilted && isTouch()) setHandlers(map, ['dragging'], false);
+}
+
+/**
+ * Watch a media query, returning a function that stops watching. Wraps the
+ * addEventListener/addListener split for legacy Safari in one place.
+ */
+function watch(query, onChange) {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+    return () => {};
+  }
+  const mql = window.matchMedia(query);
+  if (mql.addEventListener) mql.addEventListener('change', onChange);
+  else if (mql.addListener) mql.addListener(onChange);
+  else return () => {};
+
+  return () => {
+    if (mql.removeEventListener) mql.removeEventListener('change', onChange);
+    else if (mql.removeListener) mql.removeListener(onChange);
+  };
 }
 
 function prefersDark() {
@@ -67,19 +111,11 @@ function addTileLayer(L, map, scheme) {
   }).addTo(map);
 }
 
-/** Tear down the currently live map, if any (instance + its theme listener). */
+/** Tear down the currently live map, if any (instance + its media watchers). */
 export function detachMap() {
   if (!current) return;
-  const { map, mql, mqlListener, tiltMql, tiltListener } = current;
-  if (mql && mqlListener) {
-    if (mql.removeEventListener) mql.removeEventListener('change', mqlListener);
-    else if (mql.removeListener) mql.removeListener(mqlListener);
-  }
-  if (tiltMql && tiltListener) {
-    if (tiltMql.removeEventListener) tiltMql.removeEventListener('change', tiltListener);
-    else if (tiltMql.removeListener) tiltMql.removeListener(tiltListener);
-  }
-  try { map.remove(); } catch { /* container already gone */ }
+  current.watchers.forEach(stop => stop());
+  try { current.map.remove(); } catch { /* container already gone */ }
   current = null;
 }
 
@@ -99,27 +135,18 @@ export function attachMap(container, { lat, lon } = {}) {
   const tileLayer = addTileLayer(L, map, currentScheme());
   L.marker([lat, lon]).addTo(map);
 
-  setPointerHandlers(map, !isTilted());
+  applyInteractionPolicy(map);
 
-  let mql = null, mqlListener = null;
-  if (typeof window.matchMedia === 'function') {
-    mql = window.matchMedia('(prefers-color-scheme: dark)');
-    mqlListener = () => refreshTheme();
-    if (mql.addEventListener) mql.addEventListener('change', mqlListener);
-    else if (mql.addListener) mql.addListener(mqlListener);
-  }
+  // Resizing across the breakpoint tilts or straightens the card, and a
+  // device can change its primary pointer (a tablet gaining a trackpad), so
+  // the handlers follow rather than being stranded at their init value.
+  const watchers = [
+    watch('(prefers-color-scheme: dark)', () => refreshTheme()),
+    watch(TILTED, () => applyInteractionPolicy(map)),
+    watch(TOUCH, () => applyInteractionPolicy(map))
+  ];
 
-  // Resizing across the breakpoint tilts or straightens the card, so the
-  // handlers have to follow rather than being stranded at their init value.
-  let tiltMql = null, tiltListener = null;
-  if (typeof window.matchMedia === 'function') {
-    tiltMql = window.matchMedia(TILTED);
-    tiltListener = event => setPointerHandlers(map, !event.matches);
-    if (tiltMql.addEventListener) tiltMql.addEventListener('change', tiltListener);
-    else if (tiltMql.addListener) tiltMql.addListener(tiltListener);
-  }
-
-  current = { map, tileLayer, mql, mqlListener, tiltMql, tiltListener };
+  current = { map, tileLayer, watchers };
   return map;
 }
 

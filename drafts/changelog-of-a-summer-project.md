@@ -27,4 +27,4 @@ The biggest changes. A movie section appears (thank you Edo), with the same Wiki
 
 - prominent figures born in the City from the architecture, design, ecology, sociology fields
 - a random trivia about the City section (thanks Edo x2!)
-- most associated word to the City on a web search
+- most associated word to the City on a web search (thanks Edo x3!!!)

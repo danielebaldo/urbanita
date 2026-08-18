@@ -1,0 +1,70 @@
+# Write a journal post by committing a Markdown file to drafts/ — this turns
+# it into blog/<slug>.html, lists it on the Journal index, and commits the
+# result back. GitHub Pages then deploys as it always does.
+#
+# Nothing needs to run locally, so a post can be written and published
+# entirely from github.com.
+#
+# No infinite loop: this only triggers on drafts/**.md, while the commit it
+# makes touches blog/** — and pushes made with GITHUB_TOKEN don't start new
+# workflow runs anyway.
+
+name: Publish journal drafts
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'drafts/**.md'
+  # Lets you regenerate every post by hand from the Actions tab, e.g. after
+  # changing the post template or the Markdown converter.
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+# Two pushes in quick succession would otherwise race to commit the same
+# generated files.
+concurrency:
+  group: publish-journal
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # Every draft, every run — publish-post.js rewrites a post that already
+      # exists rather than duplicating it, keeping the date it was first
+      # published, so this is safe to repeat.
+      - name: Publish drafts
+        shell: bash
+        run: |
+          shopt -s nullglob
+          drafts=(drafts/*.md)
+          if [ ${#drafts[@]} -eq 0 ]; then
+            echo "No drafts found."
+            exit 0
+          fi
+          for draft in "${drafts[@]}"; do
+            echo "-> $draft"
+            node scripts/publish-post.js "$draft"
+          done
+
+      - name: Commit the generated pages
+        shell: bash
+        run: |
+          if git diff --quiet -- blog; then
+            echo "blog/ unchanged — nothing to commit."
+            exit 0
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add blog
+          git commit -m "Publish journal drafts"
+          git push

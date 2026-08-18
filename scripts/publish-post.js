@@ -14,7 +14,7 @@ import { readFile, writeFile, access } from 'node:fs/promises';
 import { constants as FS } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { slugify, formatDate, renderPostPage, insertIndexEntry } from './lib/post-page.js';
+import { slugify, formatDate, renderPostPage, upsertIndexEntry, existingPostDate } from './lib/post-page.js';
 import { markdownToHtml } from './lib/markdown.js';
 
 const ROOT       = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
@@ -63,27 +63,41 @@ async function main() {
 
   const slug = slugify(title);
   const postFile = path.join(BLOG_DIR, `${slug}.html`);
-  if (await fileExists(postFile)) {
-    console.error(`blog/${slug}.html already exists. Edit it directly, or rename the draft's title to publish as a new post.`);
-    process.exit(1);
+
+  /* Re-publishing is a normal thing to do — it's how you correct a typo, and
+     the CI workflow regenerates every draft on each run. So an existing post
+     is rewritten rather than refused. Its original date is carried over, or
+     an explicit `date: YYYY-MM-DD` in the frontmatter wins over both. */
+  const republish = await fileExists(postFile);
+  const previous = republish ? existingPostDate(await readFile(postFile, 'utf8')) : null;
+
+  let { display, iso } = previous || formatDate(new Date());
+  if (data.date) {
+    const parsed = new Date(data.date);
+    if (Number.isNaN(parsed.getTime())) {
+      console.error(`Draft has an unreadable "date: ${data.date}" — use YYYY-MM-DD.`);
+      process.exit(1);
+    }
+    ({ display, iso } = formatDate(parsed));
   }
 
-  const { display, iso } = formatDate(new Date());
   const bodyHtml = markdownToHtml(body);
-
   await writeFile(postFile, renderPostPage({ title, excerpt, iso, display, bodyHtml }));
 
   const indexHtml = await readFile(INDEX_FILE, 'utf8');
-  const updatedIndex = insertIndexEntry(indexHtml, { title, excerpt, slug, iso, display });
+  const updatedIndex = upsertIndexEntry(indexHtml, { title, excerpt, slug, iso, display });
   if (!updatedIndex) {
     console.error('Could not find <ul class="post-list"> in blog/index.html — add the entry there manually.');
     process.exit(1);
   }
   await writeFile(INDEX_FILE, updatedIndex);
 
-  console.log(`Published blog/${slug}.html`);
-  console.log(`Added it to the top of blog/index.html's post list.`);
-  console.log(`Next: open blog/${slug}.html in a browser to check it, then commit + push.`);
+  if (republish) {
+    console.log(`Updated blog/${slug}.html (kept its ${iso} date) and its index entry.`);
+  } else {
+    console.log(`Published blog/${slug}.html`);
+    console.log(`Added it to the top of blog/index.html's post list.`);
+  }
 }
 
 main();

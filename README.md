@@ -216,6 +216,59 @@ python3 -m http.server 8000    # then visit http://localhost:8000
 
 Use a server, not `file://` — ES modules won't load from the filesystem.
 
+## Writing a journal post
+
+**Add a Markdown file to `drafts/` and push it. That's the whole process.**
+
+`.github/workflows/publish-journal.yml` turns it into `blog/<slug>.html`,
+lists it on the Journal index, and commits the result back; Pages deploys
+from there as usual. Nothing runs locally, so a post can be written and
+published entirely from github.com — or a phone.
+
+A draft is Markdown with two frontmatter lines:
+
+```markdown
+---
+title: Changelog of a Summer project
+excerpt: The road towards a complete urbanite tool
+---
+
+## A heading
+
+The post.
+```
+
+The filename doesn't matter — the slug comes from `title`. Add an optional
+`date: 2026-08-18` to backdate a post; otherwise the first publish date is
+used and kept.
+
+**To correct a post, edit its draft and push again.** Re-publishing rewrites
+the post in place and updates its index entry rather than duplicating it,
+keeping the date it first went out. The workflow regenerates *every* draft on
+each run, which is why that has to hold. "Run workflow" in the Actions tab
+regenerates everything by hand — useful after changing the post template or
+the Markdown converter.
+
+Locally, if you'd rather (needs node on PATH):
+
+```sh
+node scripts/new-draft.js "Post Title"          # -> drafts/<slug>.md
+node scripts/publish-post.js drafts/<slug>.md   # -> blog/<slug>.html
+```
+
+`node scripts/new-post.js "Title" "excerpt"` scaffolds an HTML post directly,
+skipping Markdown entirely.
+
+`scripts/lib/markdown.js` is deliberately tiny and supports only what these
+posts use: `##`/`###` headings, `**bold**`, `*italic*` (asterisks only — not
+`_underscores_`), `` `code` ``, `[links](url)`, `- ` bullets, and ` -- ` for
+an em dash. Blank lines separate blocks; consecutive lines are joined into
+one paragraph. Anything beyond that, write as HTML in the generated file.
+
+`blog/index.html` must keep its `<ul class="post-list">` even when empty —
+that's the anchor `publish-post.js` inserts entries after. The "no entries
+yet" line below it hides itself once the list has a post.
+
 ## Deploy to GitHub Pages
 
 1. Create a repo.

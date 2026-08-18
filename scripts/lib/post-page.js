@@ -98,13 +98,9 @@ export function renderPostPage({ title, excerpt, iso, display, bodyHtml }) {
 `;
 }
 
-/** Insert a post-list <li> at the top of blog/index.html's <ul class="post-list">. */
-export function insertIndexEntry(indexHtml, { title, excerpt, slug, iso, display }) {
-  const marker = '<ul class="post-list">';
-  const markerIndex = indexHtml.indexOf(marker);
-  if (markerIndex === -1) return null;
-
-  const entry = `
+/** The <li> for one post, as it appears in blog/index.html's post list. */
+function indexEntry({ title, excerpt, slug, iso, display }) {
+  return `
       <li>
         <time datetime="${iso}">${display}</time>
         <a href="${slug}.html">${escapeHtml(title)}</a>
@@ -112,7 +108,58 @@ export function insertIndexEntry(indexHtml, { title, excerpt, slug, iso, display
           ${escapeHtml(excerpt)}
         </p>
       </li>`;
+}
+
+/** The existing <li> for a slug, or null. Used to update a post in place. */
+function findEntry(indexHtml, slug) {
+  const href = `href="${slug}.html"`;
+  const at = indexHtml.indexOf(href);
+  if (at === -1) return null;
+
+  const start = indexHtml.lastIndexOf('<li>', at);
+  const close = indexHtml.indexOf('</li>', at);
+  if (start === -1 || close === -1) return null;
+
+  const end = close + '</li>'.length;
+  // Swallow the preceding whitespace too, so replacing doesn't leave a gap.
+  const lineStart = indexHtml.lastIndexOf('\n', start);
+  return { start: lineStart === -1 ? start : lineStart, end };
+}
+
+/**
+ * Add the post to blog/index.html, or update it if it's already listed.
+ *
+ * Re-publishing has to be safe: the CI workflow regenerates every draft on
+ * each run, and a plain insert would stack up duplicate entries. An existing
+ * post is rewritten where it already sits, which also keeps the list in
+ * publication order rather than jumping an edited old post to the top.
+ *
+ * Returns null if the list marker is missing (see blog/index.html).
+ */
+export function upsertIndexEntry(indexHtml, { title, excerpt, slug, iso, display }) {
+  const entry = indexEntry({ title, excerpt, slug, iso, display });
+
+  const existing = findEntry(indexHtml, slug);
+  if (existing) {
+    return indexHtml.slice(0, existing.start) + entry + indexHtml.slice(existing.end);
+  }
+
+  const marker = '<ul class="post-list">';
+  const markerIndex = indexHtml.indexOf(marker);
+  if (markerIndex === -1) return null;
 
   const insertAt = markerIndex + marker.length;
   return indexHtml.slice(0, insertAt) + entry + indexHtml.slice(insertAt);
+}
+
+/** Kept for scripts/new-post.js, which only ever creates brand-new posts. */
+export const insertIndexEntry = upsertIndexEntry;
+
+/**
+ * The date already published for this post, if any, so that editing a draft
+ * doesn't silently re-date the post to today.
+ */
+export function existingPostDate(postHtml) {
+  const match = /<time datetime="(\d{4}-\d{2}-\d{2})">([^<]*)<\/time>/.exec(postHtml || '');
+  return match ? { iso: match[1], display: match[2] } : null;
 }

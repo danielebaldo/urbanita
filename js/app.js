@@ -14,26 +14,14 @@ import {
   showSkeleton, showState, renderCity, renderOptions
 } from './ui.js';
 
-import { initMap, showLocation, clearLocation } from './map.js';
+import { attachMap, detachMap, refreshTheme } from './map.js';
 
 const SITE_NAME = 'Urbanìta';
 const SEARCH_LIMIT = 10;
 
-const mapSection = document.getElementById('map-section');
-const mapEl      = document.getElementById('map');
-
-/** Reveal the page-wide map (created lazily, on first use) and fly it to a city. */
-function revealMap(coordinates, label) {
-  if (mapSection) mapSection.className = 'map-section is-visible';
-  if (mapEl) initMap(mapEl);
-  showLocation(coordinates, label);
-}
-
-/** Hide the map again — nothing to show without a city's coordinates. */
-function hideMap() {
-  if (mapSection) mapSection.className = 'map-section';
-  clearLocation();
-}
+// The footer's light/dark switch (js/theme.js) doesn't know the map
+// exists — it just announces the change.
+document.addEventListener('urbanita:theme-change', refreshTheme);
 
 const form        = document.getElementById('search-form');
 const input       = document.getElementById('city-input');
@@ -69,11 +57,11 @@ function cityFromUrl() {
    Lookup
    -------------------------------------------------------------------------- */
 
-/** Render the card and reveal/fly the page-wide map, if it has coordinates. */
+/** Render the card and (re)attach its map, if it has coordinates. */
 function showCity(summary, facts, news) {
-  renderCity(results, summary, { facts, news });
-  if (summary.coordinates) revealMap(summary.coordinates, summary.title);
-  else hideMap();
+  const { mapContainer } = renderCity(results, summary, { facts, news });
+  if (mapContainer) attachMap(mapContainer, summary.coordinates);
+  else detachMap();
 }
 
 /**
@@ -141,6 +129,10 @@ async function lookup(rawQuery, { push = true } = {}) {
   if (push) setUrl(query);
   if (input.value !== query) input.value = query;
 
+  // Whatever was on screen is about to be replaced (skeleton, a fresh
+  // card, or a state message) — its map, if any, must go with it.
+  detachMap();
+
   const key = query.toLowerCase();
   if (cache.has(key)) {
     const cached = cache.get(key);
@@ -206,6 +198,7 @@ async function lookupRandom() {
   inFlight = controller;
   const signal = controller.signal;
 
+  detachMap();
   showSkeleton(results);
   submitBtn.disabled = true;
   randomBtn.disabled = true;
@@ -315,7 +308,7 @@ window.addEventListener('popstate', event => {
   if (city) {
     lookup(city, { push: false });
   } else {
-    hideMap();
+    detachMap();
     input.value = '';
     while (results.firstChild) results.removeChild(results.firstChild);
     document.title = `${SITE_NAME} \u2014 Explore the world's cities`;

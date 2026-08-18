@@ -92,11 +92,8 @@ export function installDom({ search = '' } = {}) {
     'results': new Node('section'),
     'suggestions': new Node('div'),
     'random-btn': new Node('button'),
-    'theme-toggle': new Node('button'),
-    'map-section': new Node('section'),
-    'map': new Node('div')
+    'theme-toggle': new Node('button')
   };
-  els['map-section'].className = 'map-section';   // matches index.html's static class
   els['city-input'].value = '';
 
   const documentElement = new Node('html');
@@ -133,7 +130,7 @@ export function installDom({ search = '' } = {}) {
   global.location = loc;
   global.history = hist;
   global.window = win;
-  delete global.window.maplibregl;
+  delete global.window.L;
   delete global.window.matchMedia;
   global.AbortController = class {
     constructor() {
@@ -156,58 +153,34 @@ export function installDom({ search = '' } = {}) {
 }
 
 /* --------------------------------------------------------------------------
-   Fake MapLibre GL — records the one persistent map instance, its camera
-   moves (flyTo) and its marker, for lifecycle tests.
+   Fake Leaflet — records created/removed map instances for lifecycle tests.
    -------------------------------------------------------------------------- */
 
-export function installFakeMapLibre() {
+export function installFakeLeaflet() {
   const instances = [];
 
-  class FakePopup {
-    constructor(opts) { this.opts = opts; this.text = null; }
-    setText(t) { this.text = t; return this; }
-    setHTML(h) { this.html = h; return this; }
+  class FakeLayer {
+    addTo(map) { this.map = map; map.layers.push(this); return this; }
   }
-
-  class FakeMarker {
-    constructor(opts) { this.opts = opts; this.map = null; this.lngLat = null; this.popup = null; }
-    setLngLat(ll) { this.lngLat = ll; return this; }
-    setPopup(p) { this.popup = p; return this; }
-    addTo(map) { this.map = map; return this; }
-    remove() { this.map = null; return this; }
-  }
-
-  class FakeNavigationControl { constructor(opts) { this.opts = opts; } }
 
   class FakeMap {
-    constructor(opts) {
+    constructor(container, opts) {
+      this.container = container;
       this.opts = opts;
-      this.container = opts.container;
-      this.style = opts.style;
-      this.center = opts.center;
-      this.zoom = opts.zoom;
-      this.controls = [];
-      this.flights = [];
-      this.listeners = {};
+      this.layers = [];
+      this.removed = false;
       instances.push(this);
     }
-    addControl(ctrl) { this.controls.push(ctrl); return this; }
-    flyTo(opts) {
-      this.flights.push(opts);
-      this.center = opts.center;
-      if (opts.zoom !== undefined) this.zoom = opts.zoom;
-      return this;
-    }
-    on(type, fn) { (this.listeners[type] ||= []).push(fn); return this; }
-    /** Test helper: simulate MapLibre firing a lifecycle event. */
-    fire(type) { (this.listeners[type] || []).forEach(fn => fn()); }
+    removeLayer(layer) { this.layers = this.layers.filter(l => l !== layer); return this; }
+    remove() { this.removed = true; }
+    /** Test helper: whichever tile layer (has a .url) is currently on the map. */
+    get tileUrl() { return (this.layers.find(l => l.url) || {}).url; }
   }
 
-  global.window.maplibregl = {
-    Map: FakeMap,
-    Marker: FakeMarker,
-    Popup: FakePopup,
-    NavigationControl: FakeNavigationControl
+  global.window.L = {
+    map: (container, opts) => new FakeMap(container, opts),
+    tileLayer: (url) => { const l = new FakeLayer(); l.url = url; return l; },
+    marker: () => new FakeLayer()
   };
 
   return instances;

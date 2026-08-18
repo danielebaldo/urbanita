@@ -166,7 +166,17 @@ export function renderCity(container, data, { facts = null, news = [] } = {}) {
   }
   if (meta.childNodes.length) card.appendChild(meta);
 
+  let mapContainer = null;
+  if (data.coordinates) {
+    mapContainer = el('div', {
+      class: 'map-container',
+      'aria-label': 'Map showing ' + data.title
+    });
+    card.appendChild(mapContainer);
+  }
+
   container.appendChild(card);
+  return { mapContainer };
 }
 
 /* --------------------------------------------------------------------------

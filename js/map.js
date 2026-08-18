@@ -18,7 +18,33 @@ const TILES = {
   }
 };
 
-let current = null;   // { map, tileLayer, mql, mqlListener } | null
+/* Above this width the map card is tilted (see .city in css/style.css), and
+   Leaflet cannot cope: it has no rotation support at all — `getScale()` reads
+   `rect.width / offsetWidth`, and a rotated element's rect is its bounding
+   box, so every pointer-to-latlng conversion comes out skewed. Dragging would
+   slide against the cursor. So the interactions that convert a screen point
+   to a coordinate are turned off while tilted; the +/- buttons are ordinary
+   clicks and keep working. */
+const TILTED = '(min-width: 1200px)';
+
+/** Interactions that map a screen point to a lat/lng — unusable when tilted. */
+const POINTER_HANDLERS = ['dragging', 'doubleClickZoom', 'touchZoom'];
+
+let current = null;   // { map, tileLayer, mql, mqlListener, tiltMql, tiltListener } | null
+
+function isTilted() {
+  return typeof window !== 'undefined' && typeof window.matchMedia === 'function' &&
+    window.matchMedia(TILTED).matches;
+}
+
+function setPointerHandlers(map, enabled) {
+  POINTER_HANDLERS.forEach(name => {
+    const handler = map[name];
+    if (!handler) return;                  // option was never enabled
+    if (enabled) handler.enable();
+    else handler.disable();
+  });
+}
 
 function prefersDark() {
   return typeof window !== 'undefined' && typeof window.matchMedia === 'function' &&
@@ -44,10 +70,14 @@ function addTileLayer(L, map, scheme) {
 /** Tear down the currently live map, if any (instance + its theme listener). */
 export function detachMap() {
   if (!current) return;
-  const { map, mql, mqlListener } = current;
+  const { map, mql, mqlListener, tiltMql, tiltListener } = current;
   if (mql && mqlListener) {
     if (mql.removeEventListener) mql.removeEventListener('change', mqlListener);
     else if (mql.removeListener) mql.removeListener(mqlListener);
+  }
+  if (tiltMql && tiltListener) {
+    if (tiltMql.removeEventListener) tiltMql.removeEventListener('change', tiltListener);
+    else if (tiltMql.removeListener) tiltMql.removeListener(tiltListener);
   }
   try { map.remove(); } catch { /* container already gone */ }
   current = null;
@@ -69,6 +99,8 @@ export function attachMap(container, { lat, lon } = {}) {
   const tileLayer = addTileLayer(L, map, currentScheme());
   L.marker([lat, lon]).addTo(map);
 
+  setPointerHandlers(map, !isTilted());
+
   let mql = null, mqlListener = null;
   if (typeof window.matchMedia === 'function') {
     mql = window.matchMedia('(prefers-color-scheme: dark)');
@@ -77,7 +109,17 @@ export function attachMap(container, { lat, lon } = {}) {
     else if (mql.addListener) mql.addListener(mqlListener);
   }
 
-  current = { map, tileLayer, mql, mqlListener };
+  // Resizing across the breakpoint tilts or straightens the card, so the
+  // handlers have to follow rather than being stranded at their init value.
+  let tiltMql = null, tiltListener = null;
+  if (typeof window.matchMedia === 'function') {
+    tiltMql = window.matchMedia(TILTED);
+    tiltListener = event => setPointerHandlers(map, !event.matches);
+    if (tiltMql.addEventListener) tiltMql.addEventListener('change', tiltListener);
+    else if (tiltMql.addListener) tiltMql.addListener(tiltListener);
+  }
+
+  current = { map, tileLayer, mql, mqlListener, tiltMql, tiltListener };
   return map;
 }
 

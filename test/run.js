@@ -648,6 +648,173 @@ group('27. News proxy unreachable: degrade, do not block');
 
 /* ========================================================================== */
 
+group('28. Films (films.js)');
+{
+  const { fetchCityFilms } = await import('../js/films.js');
+  const world = makeWorld();
+  installDom();
+  installFetch(world);
+
+  check('no QID means no query at all', (await fetchCityFilms(null)).length === 0);
+
+  const films = await fetchCityFilms('Q597');
+  check('returns the fixture films', films.length === 3, films.length);
+  check('strips the "(film)" disambiguator',
+    films[0].title === 'Night Train to Lisbon', films[0].title);
+  check('strips the "(2009 film)" disambiguator',
+    films[2].title === 'Alive', films[2].title);
+  check('keeps the year', films[0].year === 2013, films[0].year);
+  check('a missing year stays null', films[2].year === null, films[2].year);
+  check('links to the English Wikipedia article',
+    films[0].url === 'https://en.wikipedia.org/wiki/Night_Train_to_Lisbon_(film)', films[0].url);
+
+  check('a city with no films yields an empty array',
+    (await fetchCityFilms('Q36433')).length === 0);
+
+  world.films = { Q597: 'ERROR' };
+  check('an unreachable endpoint yields [], not a throw',
+    (await fetchCityFilms('Q597')).length === 0);
+}
+
+/* ========================================================================== */
+
+group('29. Full app boot — films render');
+{
+  const { els, world } = await boot();
+  submit(els, 'Lisbon');
+  await settle();
+
+  const panels = els['results'].byClass('panel--films');
+  check('films panel renders for Lisbon', panels.length === 1);
+  const links = panels[0].findAll('A');
+  check('one link per film', links.length === 3, links.length);
+  check('shows the cleaned title',
+    panels[0].textContent.includes('Night Train to Lisbon'), panels[0].textContent);
+  check('shows the year', panels[0].textContent.includes('2013'));
+  check('the skeleton is gone once the list lands',
+    panels[0].byClass('films-skeleton').length === 0);
+
+  const before = world.filmCalls;
+  submit(els, 'Porto');
+  await settle();
+  check('no films panel at all when the city has none (no empty box)',
+    els['results'].byClass('panel--films').length === 0);
+  check('a city with no films still queried once', world.filmCalls === before + 1);
+
+  submit(els, 'Lisbon');          // cache hit
+  await settle();
+  check('cache hit re-renders the films without querying again',
+    world.filmCalls === before + 1, world.filmCalls);
+  check('films still on screen after the cache hit',
+    els['results'].byClass('panel--films').length === 1);
+}
+
+/* ========================================================================== */
+
+group('30. Films degrade without blocking the card');
+{
+  const world = makeWorld();
+  world.films = { Q597: 'ERROR' };
+  const { els } = await boot({ world });
+  submit(els, 'Lisbon');
+  await settle();
+
+  const out = els['results'].textContent;
+  check('city still shown when Wikidata is unreachable',
+    out.includes('largest city of Portugal'), out);
+  check('no error state', !out.includes('Something went wrong'));
+  check('no films panel left behind', els['results'].byClass('panel--films').length === 0);
+  check('the map still renders', els['results'].byClass('map-container').length === 1);
+}
+
+/* ========================================================================== */
+
+group('31. Collage structure');
+{
+  const { els } = await boot();
+  submit(els, 'Lisbon');
+  await settle();
+
+  const city = els['results'].byClass('city')[0];
+  check('both rails render', els['results'].byClass('city-rail').length === 2);
+
+  const card = els['results'].byClass('city-card')[0];
+  check('key facts are their own card, not inside the city card',
+    card.byClass('facts').length === 0 && els['results'].byClass('facts').length === 1);
+  const left  = els['results'].byClass('city-rail--left')[0];
+  const right = els['results'].byClass('city-rail--right')[0];
+  check('facts and news sit in the left rail',
+    left.byClass('city-facts').length === 1 && left.byClass('panel--news').length === 1);
+  check('map and films sit in the right rail',
+    right.byClass('panel--map').length === 1 && right.byClass('panel--films').length === 1);
+  // The point of the split: news and films are often absent, facts and the
+  // map almost never are, so each side keeps one dependable card.
+  check('each rail holds one near-always-present card',
+    left.byClass('city-facts').length === 1 && right.byClass('panel--map').length === 1);
+  check('the source link stays in the city card (CC BY-SA attribution)',
+    card.byClass('card-meta').length === 1);
+  check('the city card is a direct child of .city, beside the rails',
+    city.childNodes.filter(n => (n.className || '').includes('city-card')).length === 1);
+
+  /* A city with no facts and no coordinates should not leave an empty rail
+     behind for the grid to reserve a column for. */
+  const world = makeWorld();
+  world.articles['Nowhere'] = {
+    type: 'standard', title: 'Nowhere', extract: 'A place with almost nothing recorded.',
+    content_urls: { desktop: { page: 'https://en.wikipedia.org/wiki/Nowhere' } }
+  };
+  // Q36433 (Porto's) classifies as a city but carries no facts at all in the
+  // fixture world — so this article yields neither a facts box nor a map.
+  world.qids['Nowhere'] = 'Q36433';
+  const bare = await boot({ world });
+  submit(bare.els, 'Nowhere');
+  await settle();
+  check('no left rail at all when there are neither facts nor news',
+    bare.els['results'].byClass('city-rail--left').length === 0);
+  check('the right rail survives it (films are still being fetched)',
+    bare.els['results'].byClass('city-rail--right').length === 1);
+}
+
+/* ========================================================================== */
+
+group('32. Map interaction follows the tilt');
+{
+  /* Wide enough to tilt: the pointer-driven handlers must be off, because
+     Leaflet has no rotation support and its screen-point maths would skew. */
+  const dom = installDom();
+  const maps = installFakeLeaflet();
+  const media = installFakeMatchMedia(false);
+  installFetch(makeWorld());
+  await loadApp();
+  media.setMatches('(min-width: 1200px)', true);
+
+  submit(dom.els, 'Lisbon');
+  await settle();
+  const map = maps[maps.length - 1];
+  check('dragging is off while the card is tilted', map.dragging.enabled === false);
+  check('double-click zoom is off too (it resolves a point to a latlng)',
+    map.doubleClickZoom.enabled === false);
+  check('a tilt listener was registered', media.listenerCount('(min-width: 1200px)') === 1);
+  check('the theme listener is still separate', media.listenerCount() === 1);
+
+  /* Narrowing below the breakpoint straightens the card, so it comes back. */
+  media.setMatches('(min-width: 1200px)', false);
+  check('dragging returns once the card is straight', map.dragging.enabled === true);
+
+  /* And on a narrow screen it is never taken away in the first place. */
+  const narrow = installDom();
+  const narrowMaps = installFakeLeaflet();
+  installFakeMatchMedia(false);
+  installFetch(makeWorld());
+  await loadApp();
+  submit(narrow.els, 'Lisbon');
+  await settle();
+  check('dragging is left alone when stacked',
+    narrowMaps[narrowMaps.length - 1].dragging.enabled === true);
+}
+
+/* ========================================================================== */
+
 console.log('\n' + '-'.repeat(48));
 console.log(`  ${pass} passed, ${fail} failed`);
 console.log('-'.repeat(48));

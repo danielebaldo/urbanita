@@ -190,7 +190,7 @@ main {
 }
 
 .hero {
-  padding: 4.5rem 0 2.5rem;
+  padding: 4.5rem 0 3.5rem;
   text-align: center;
 }
 
@@ -241,12 +241,16 @@ main {
 #city-input:hover { border-color: var(--ink-soft); }
 #city-input::-webkit-search-cancel-button { cursor: pointer; }
 
+/* --note rather than --terracotta as the fill: the label is --card, which
+   only reaches 4.18:1 on --terracotta in light mode and so misses AA. The
+   deeper tone takes it to 5.15:1 for an all-but-imperceptible hue shift.
+   Dark mode already cleared it, and --note is the same colour there. */
 #search-form button {
   font-family: inherit;
   font-size: 1rem;
   font-weight: 500;
   color: var(--card);
-  background: var(--terracotta);
+  background: var(--note);
   border: none;
   border-radius: var(--radius-sm);
   padding: .85rem 1.5rem;
@@ -286,30 +290,45 @@ main {
   cursor: pointer;
   transition: all .15s ease;
 }
+/* Quiet hover, deliberately not the sage fill it used to use: sage now means
+   "the secondary action" (Surprise me), and a chip lighting up green looked
+   like a small copy of that button. */
 .suggestions button:hover {
-  color: var(--ink-on-accent);
-  border-color: var(--sage);
-  background: var(--sage);
+  color: var(--ink);
+  border-color: var(--ink-soft);
+  background: var(--stone);
 }
 
-.suggestions .random-btn {
+/* Sits on its own line under the suggestions, centred and a size up: it's
+   not another suggestion, it's the alternative to reading them. */
+.surprise {
+  display: flex;
+  justify-content: center;
+  margin-top: 1.15rem;
+}
+
+/* Sage, the palette's secondary accent fill — so it reads as the alternative
+   to Explore rather than a second primary. --ink-on-accent exists for exactly
+   this: sage is one of the few tokens that doesn't flip between themes, so a
+   fixed dark label holds 5.18:1 on it in both. */
+.random-btn {
   display: inline-flex;
   align-items: center;
-  gap: .35rem;
+  gap: .45rem;
   font-family: inherit;
-  font-size: .84rem;
+  font-size: .95rem;
   font-weight: 600;
-  color: var(--card);
-  background: var(--terracotta);
-  border: 1px solid var(--terracotta);
+  color: var(--ink-on-accent);
+  background: var(--sage);
+  border: 1px solid var(--sage);
   border-radius: 999px;
-  padding: .3rem .8rem;
+  padding: .5rem 1.35rem;
   box-shadow: var(--shadow-sm);
   cursor: pointer;
   transition: all .15s ease;
 }
 .random-btn svg { flex-shrink: 0; }
-.suggestions .random-btn:hover { filter: brightness(1.08); box-shadow: var(--shadow-md); }
+.random-btn:hover { filter: brightness(1.08); box-shadow: var(--shadow-md); }
 .random-btn[disabled] { opacity: .55; cursor: progress; }
 
 /* ==========================================================================
@@ -328,14 +347,21 @@ main {
   animation: rise .35s cubic-bezier(.2, .7, .3, 1) both;
 }
 
+/* The tilt rides along in the keyframes rather than sitting in its own rule.
+   `transform` is one property: a bare `transform: none` at the end of the
+   animation would wipe a rotate() set elsewhere the moment the card settled,
+   and fill-mode `both` would hold it wiped. --tilt is unset (0deg) until the
+   collage breakpoint, so stacked cards animate exactly as before. */
 @keyframes rise {
-  from { opacity: 0; transform: translateY(10px); }
-  to   { opacity: 1; transform: none; }
+  from { opacity: 0; transform: translateY(10px) rotate(var(--tilt, 0deg)); }
+  to   { opacity: 1; transform: rotate(var(--tilt, 0deg)); }
 }
 
-/* A result is three separate surfaces — the city, its news, its map —
-   stacked with real air between them and eased in one after the other, so
-   the eye reads them in order rather than as one undifferentiated slab. */
+/* A result is five separate surfaces — the city, its facts, its map, its
+   news, its films — with real air between them and eased in one after the
+   other, so the eye reads them in order rather than as one undifferentiated
+   slab. Stacked in one column here; the collage arrangement is at the
+   bottom of this file, behind a min-width query. */
 
 .city {
   display: flex;
@@ -343,14 +369,35 @@ main {
   gap: 1.5rem;
 }
 
-.city > * {
+/* The rails only exist to group the collage's columns. Stacked, they step
+   out of the way entirely and their cards become items of .city directly —
+   which is why `order` below can sequence all five as one list. */
+.city-rail { display: contents; }
+
+.city-card   { order: 1; }
+.city-facts  { order: 2; }
+.panel--news { order: 3; }
+.panel--films{ order: 4; }
+.panel--map  { order: 5; }
+
+/* Applied to the cards, never to the rails: a `display: contents` element
+   has no box to animate, and animating both would double the fade. */
+.city > :not(.city-rail),
+.city-rail > * {
   animation: rise .45s cubic-bezier(.2, .7, .3, 1) both;
 }
-.city > :nth-child(2) { animation-delay: .08s; }
-.city > :nth-child(3) { animation-delay: .16s; }
+
+/* Staggered by identity rather than by :nth-child — the rails mean DOM
+   position no longer tracks reading order. */
+.city-facts   { animation-delay: .08s; }
+.panel--map   { animation-delay: .12s; }
+.panel--news  { animation-delay: .16s; }
+.panel--films { animation-delay: .24s; }
 
 @media (prefers-reduced-motion: reduce) {
-  .card, .city > * { animation: none; }
+  .card,
+  .city > :not(.city-rail),
+  .city-rail > * { animation: none; }
   * { transition-duration: .01ms !important; }
 }
 
@@ -400,6 +447,155 @@ main {
 }
 
 .panel-body { padding: 1.3rem 1.85rem 1.5rem; }
+
+/* Films: a slot is rendered up front and filled once Wikidata answers (it
+   can take a few seconds for a big city), so the space is held and nothing
+   jumps when the list lands. An empty result removes the slot entirely. */
+
+.films-skeleton { padding: 1.5rem 1.85rem; }
+
+.films-skeleton span {
+  display: block;
+  height: .75rem;
+  border-radius: 4px;
+  background: linear-gradient(90deg, var(--stone) 25%, var(--stone-deep) 50%, var(--stone) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+  margin-bottom: .7rem;
+}
+.films-skeleton span:nth-child(2) { width: 80%; }
+.films-skeleton span:nth-child(3) { width: 60%; margin-bottom: 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  .films-skeleton span { animation: none; }
+}
+
+/* Titles are longer than headlines and wrap more, so they get a touch more
+   line height than .news-list gives them. */
+.film-list a { line-height: 1.35; }
+.film-list .news-meta { font-variant-numeric: tabular-nums; }
+
+/* --------------------------------------------------------------------------
+   The collage — wide screens only
+
+   Five cards pinned at slight angles and lapping over one another, the way
+   things fall on a desk: facts and map down the left, the city in the
+   middle, news and films down the right. Below this width everything falls
+   back to the single stacked column above.
+
+   Cards are sized by their content, not fixed: a long summary makes a taller
+   card and the overlaps shift a little between cities, which is the point of
+   a collage. Nothing is ever clipped.
+
+   `.results` only exists on index.html, so widening it can't reach the prose
+   pages. Negative margins rather than a transform on the container — a
+   transformed ancestor breaks Leaflet's positioning inside the map panel.
+   -------------------------------------------------------------------------- */
+
+@media (min-width: 1200px) {
+  .results:has(.city) {
+    margin-inline: calc((var(--wrap) - 1160px) / 2);
+  }
+
+  .city {
+    display: grid;
+    grid-template-columns: 20rem minmax(0, 1fr) 21rem;
+    align-items: start;
+    gap: 0;
+  }
+
+  /* `order` sequences the stacked column, where the rails are transparent and
+     all five cards are siblings. Inside the collage it has to be cleared
+     everywhere: on .city's children grid-column does the placing, and within
+     a rail the stacked ordering would otherwise put films above the map. DOM
+     order governs here. */
+  .city > *,
+  .city-rail > * { order: 0; }
+
+  /* Rails become real boxes again and stack their own cards. */
+  .city-rail {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    min-width: 0;
+  }
+
+  /* All three share row 1. The row must be explicit: the card comes first in
+     DOM order and claims column 2, which advances the auto-placement cursor
+     past column 1 — sparse packing then refuses to go back for the left
+     rail and drops it to a second row, stranding the card on its own. */
+  .city-rail--left  { grid-column: 1; grid-row: 1; margin-top: 1.5rem; }
+  .city-card        { grid-column: 2; grid-row: 1; }
+  /* Not flush to the top — the map led the whole composition and crowded the
+     search controls above it. */
+  .city-rail--right { grid-column: 3; grid-row: 1; margin-top: .75rem; }
+
+
+  /* The card laps over both rails and sits above them. Its own corners are
+     square to the page, so it reads as the thing everything else is pinned
+     around. */
+  .city-card {
+    z-index: 2;
+    /* Stays inside the rail panels' 1.35rem padding: at the full 1.35rem the
+       card's edge reached their text and clipped the first characters. */
+    margin-inline: -.8rem;
+    margin-top: 4.5rem;
+  }
+
+  .city-rail > * { z-index: 1; }
+
+  /* Vertical stagger, so the columns don't read as three tidy lists. */
+  .city-rail--left  .panel--news  { margin-top: 2.5rem; }
+  .city-rail--right .panel--films { margin-top: 2.25rem; }
+
+  /* The angles. Kept small — past about 3deg the type starts to feel
+     wonky rather than casual. Restated as a plain transform so the tilt
+     survives `animation: none` under prefers-reduced-motion; while the
+     entrance animation runs, its keyframes carry the same value. */
+  .city > :not(.city-rail),
+  .city-rail > * { transform: rotate(var(--tilt, 0deg)); }
+
+  /* The two sides lean away from the upright card between them, rather than
+     all four sliding the same way. Keyed to the rail and its position within
+     it, not to which card it happens to be: cards have moved between sides
+     more than once, and the direction should follow the side automatically.
+     The exact card is irrelevant — the angles only need to differ. */
+  .city-card                        { --tilt: 0deg; }
+  .city-rail--left  > :nth-child(1) { --tilt: -3deg; }
+  .city-rail--left  > :nth-child(2) { --tilt: -1.5deg; }
+  .city-rail--right > :nth-child(1) { --tilt: 1.5deg; }
+  .city-rail--right > :nth-child(2) { --tilt: 2.5deg; }
+
+  /* Rails are narrower than the middle column, so their panels need their
+     own tighter padding rather than the roomy default. */
+  .city-rail .panel-head { padding: 1.15rem 1.35rem .95rem; }
+  .city-rail .panel-body { padding: 1.15rem 1.35rem 1.3rem; }
+  .city-rail .panel-title { font-size: 1.15rem; }
+  .city-rail .films-skeleton { padding: 1.3rem 1.35rem; }
+
+  /* Title and count stack rather than sitting on one cramped line. */
+  .city-rail .panel-eyebrow { flex-basis: 100%; }
+
+  /* auto-fit's 140px floor would collapse to a single column in a 20rem
+     rail; the mockup pairs them up, and the labels are short enough. */
+  .city-facts .facts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: .9rem 1.1rem;
+    padding: 1.15rem 1.3rem;
+  }
+
+  /* The map sits right of the card, so its default top-left zoom buttons are
+     exactly where the card laps over. Everything else the lap covers is just
+     tiles, which is the intended overlapping-photos look. */
+  .city-rail .leaflet-top.leaflet-left {
+    left: auto;
+    right: 0;
+  }
+
+  /* The map is shorter here than in the stack — it's a locator in the
+     corner of the composition, not the closing full-bleed element. */
+  .city-rail .map-container { height: 230px; }
+}
 
 /* Small print inside a panel's header — sets expectations about what the
    panel holds before any of it is read, and sits above the header's rule so
@@ -509,15 +705,23 @@ main {
 
 /* Key facts (population, country, area, elevation, timezone) */
 
+/* Key facts are their own surface now, not a tinted block inside the city
+   card — hence the shadow and the border doing the work the card's edge
+   used to do. */
+.city-facts {
+  background: var(--stone);
+  border: 1px solid var(--stone-deep);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-md);
+  overflow: hidden;
+}
+
 .facts {
-  clear: both;
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   gap: 1rem 1.5rem;
-  margin: 1.5rem 0 0;
-  padding: 1.1rem 1.25rem;
-  background: var(--stone);
-  border-radius: var(--radius-sm);
+  margin: 0;
+  padding: 1.25rem 1.4rem;
 }
 
 .fact { margin: 0; }
@@ -781,6 +985,11 @@ ul.options li {
 .prose h2 {
   font-size: 1.4rem;
   margin: 2.25rem 0 .75rem;
+}
+
+.prose h3 {
+  font-size: 1.1rem;
+  margin: 1.75rem 0 .6rem;
 }
 
 .prose p, .prose ul, .prose ol {

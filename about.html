@@ -85,14 +85,55 @@
 
     <h2>About this website</h2>
     <p>
-      Urbanìta is a small city-lookup tool, built as static files talking
-      directly to the Wikipedia and Wikidata APIs from your browser &mdash;
-      no server, no database. Every search resolves an article on
-      Wikipedia, then checks Wikidata to confirm the result is a genuine
-      settlement &mdash; a city, town, village, municipality, and so on
-      &mdash; before showing it. If it isn&rsquo;t, Urbanìta says so and
-      offers real alternatives instead of guessing.
+      Urbanìta is a small city-lookup tool, built as static files that talk
+      to the Wikipedia and Wikidata APIs straight from your browser. Every
+      search resolves an article on Wikipedia, then checks Wikidata to
+      confirm the result is a genuine settlement &mdash; a city, town,
+      village, municipality, and so on &mdash; before showing it. If it
+      isn&rsquo;t, Urbanìta says so and offers real alternatives instead of
+      guessing.
     </p>
+
+    <h3>Where each part comes from</h3>
+    <ul>
+      <li>
+        <strong>The summary and the photograph</strong> are the opening of
+        the city&rsquo;s
+        <a href="https://en.wikipedia.org" rel="noopener">Wikipedia</a>
+        article, and every result links back to it.
+      </li>
+      <li>
+        <strong>The key facts</strong> &mdash; population, country, area,
+        elevation, timezone &mdash; come from
+        <a href="https://www.wikidata.org" rel="noopener">Wikidata</a>,
+        which is also what decides whether a result is really a city.
+        Missing entries are simply left out rather than guessed at.
+      </li>
+      <li>
+        <strong>On the map</strong> plots the article&rsquo;s own
+        coordinates over OpenStreetMap-based tiles.
+      </li>
+      <li>
+        <strong>In the news</strong> is a narrow, curated feed rather than
+        general news about the city: a handful of urbanism and architecture
+        publications, plus a broader news search filtered to the same
+        subjects &mdash; which is why travel pieces, and occasionally
+        culture or sport, turn up too. Most cities on most days have
+        nothing, and that is normal. It&rsquo;s also the one part that
+        doesn&rsquo;t come straight from your browser: it goes through a
+        small proxy of mine, which keeps an API key private and caches
+        each city&rsquo;s results by the hour.
+      </li>
+      <li>
+        <strong>On film</strong> asks Wikidata for films whose narrative or
+        filming location is the city, best-known first. The list is only as
+        complete as Wikidata&rsquo;s editors have made it, so plenty of
+        films set in a given city won&rsquo;t be there &mdash; and one
+        merely <em>named</em> after a city, without being set in it,
+        won&rsquo;t either.
+      </li>
+    </ul>
+
     <p>
       Full credits for the data, map tiles, and fonts it relies on are on
       the <a href="attribution.html">Attribution</a> page.

@@ -11,7 +11,7 @@ keep an API key private and results cached.
 
 ## Status
 
-Milestones 1–7 complete.
+Milestones 1–8 complete.
 
 - [x] 1. Search + summary card
 - [x] 2. Disambiguation fallback ("Did you mean…?")
@@ -21,15 +21,30 @@ Milestones 1–7 complete.
 - [x] 5. Leaflet map (CARTO Positron/Dark Matter tiles, follows the site theme)
 - [x] 6. About page, blog, attribution page
 - [x] 7. Fresh news per city (Currents API, via a small caching proxy)
+- [x] 8. "On film" per city (Wikidata narrative/filming location)
 
 Also: a manual light/dark switch in the footer (defaults to the OS
 preference, remembered after that) on every page.
 
-A result renders as three separate surfaces rather than one long card: the
+A result renders as five separate surfaces rather than one long card: the
 city (a full-bleed hero photograph with the name and description set into a
-scrim over it, then the summary and the key-facts grid), what's in the news,
-and where it is on the map. Each is omitted when there's nothing to put in
-it. The hero rewrites the width in Wikipedia's thumbnail URL to get a
+scrim over it, then the summary), its key facts, where it is on the map,
+what's in the news, and films set or shot there. Each is omitted when
+there's nothing to put in it.
+
+Below 1200px they stack in one column. Above it they become a collage —
+facts and map down the left, the city card in the middle, news and films
+down the right, tilted a degree or two and lapping over one another. Cards
+are sized by their content, so the composition breathes between cities
+rather than clipping anything. Two rail wrappers (`display: contents` while
+stacked) group the columns, which is what lets the collage close up when a
+city has no news, no films or no photograph.
+
+One consequence worth knowing: Leaflet has no rotation support, so while the
+map card is tilted the interactions that convert a screen point to a
+coordinate (drag, double-click zoom, pinch) are disabled — `js/map.js`
+follows the breakpoint and restores them below it. The +/- buttons work
+throughout. The hero rewrites the width in Wikipedia's thumbnail URL to get a
 usable size — see `heroImage` in `js/ui.js` for why only certain widths
 work.
 
@@ -43,6 +58,7 @@ blog/index.html               journal index (no posts yet)
 css/style.css                 design tokens and layout
 js/wiki.js                    Wikipedia + Wikidata calls, city classification (no DOM)
 js/news.js                    thin client for the news proxy, per city (no DOM)
+js/films.js                   films set/shot in a city, via Wikidata SPARQL (no DOM)
 js/ui.js                      rendering (no network)
 js/map.js                     Leaflet map lifecycle (the one third-party global)
 js/theme.js                   light/dark switch (every page)
@@ -216,11 +232,13 @@ All paths are relative, so both naming schemes work unchanged.
 node test/run.js
 ```
 
-136 assertions, no npm install. Covers classification (including the subclass
+172 assertions, no npm install. Covers classification (including the subclass
 walk and the batching/caching behaviour), key facts (population, country,
 area, elevation, timezone — including partial/missing data and the
 entity-claims cache reuse), city news (the proxy client's request shape and
-pass-through of results, and rendering/omitting the news section), map
+pass-through of results, and rendering/omitting the news section), films
+(title cleanup, the empty and unreachable cases, and that a cache hit
+doesn't re-query Wikidata), map
 lifecycle (attach/detach across searches, cache hits, back button,
 dark-mode tile swap), the light/dark switch (including that a manual
 choice overrides the OS in both directions), disambiguation, URL state, the

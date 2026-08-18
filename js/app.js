@@ -9,9 +9,10 @@ import {
 } from './wiki.js';
 
 import { fetchCityNews } from './news.js';
+import { fetchCityFilms } from './films.js';
 
 import {
-  showSkeleton, showState, renderCity, renderOptions
+  showSkeleton, showState, renderCity, renderFilms, renderOptions
 } from './ui.js';
 
 import { attachMap, detachMap, refreshTheme } from './map.js';
@@ -57,11 +58,61 @@ function cityFromUrl() {
    Lookup
    -------------------------------------------------------------------------- */
 
-/** Render the card and (re)attach its map, if it has coordinates. */
-function showCity(summary, facts, news) {
-  const { mapContainer } = renderCity(results, summary, { facts, news });
+/* Films are fetched after the card is already on screen — the Wikidata
+   query can take a few seconds for a big city, and nothing else should wait
+   on it. That needs its own little lifecycle: a token, so a late answer for
+   a city the user has moved on from is discarded, and a controller to stop
+   the request itself. */
+let renderToken = 0;
+let filmsController = null;
+
+function cancelFilms() {
+  renderToken++;
+  if (filmsController) {
+    filmsController.abort();
+    filmsController = null;
+  }
+}
+
+/** Render the card, (re)attach its map, and start filling in the films. */
+function showCity(summary, facts, news, { qid = null, cacheKey = null, films = null } = {}) {
+  cancelFilms();
+  const token = renderToken;
+
+  const { mapContainer, filmsSlot } = renderCity(results, summary, { facts, news });
   if (mapContainer) attachMap(mapContainer, summary.coordinates);
   else detachMap();
+
+  // Already known, from a cache hit or the back button — no second query.
+  if (films) renderFilms(filmsSlot, films);
+  else loadFilms(qid, cacheKey, filmsSlot, token);
+}
+
+/** Fill the films slot once Wikidata answers. Never throws, never blocks. */
+async function loadFilms(qid, cacheKey, slot, token) {
+  if (!qid) {
+    renderFilms(slot, []);
+    return;
+  }
+
+  const controller = new AbortController();
+  filmsController = controller;
+
+  let films = [];
+  try {
+    films = await fetchCityFilms(qid, controller.signal);
+  } catch (err) {
+    if (err.name === 'AbortError') return;    // superseded by a newer search
+    films = [];                               // Wikidata down: no section, no error
+  } finally {
+    if (filmsController === controller) filmsController = null;
+  }
+
+  // The user may have searched again while Wikidata was thinking.
+  if (token !== renderToken) return;
+
+  if (cacheKey && cache.has(cacheKey)) cache.get(cacheKey).films = films;
+  renderFilms(slot, films);
 }
 
 /**
@@ -114,7 +165,7 @@ async function resolveCity(query, signal) {
     news = [];                            // proxy down/empty: card still renders
   }
 
-  return { ok: true, summary, facts, news };
+  return { ok: true, summary, facts, news, qid };
 }
 
 async function lookup(rawQuery, { push = true } = {}) {
@@ -136,11 +187,14 @@ async function lookup(rawQuery, { push = true } = {}) {
   const key = query.toLowerCase();
   if (cache.has(key)) {
     const cached = cache.get(key);
-    showCity(cached.summary, cached.facts, cached.news);
+    showCity(cached.summary, cached.facts, cached.news, {
+      qid: cached.qid, cacheKey: key, films: cached.films
+    });
     inFlight = null;
     return;
   }
 
+  cancelFilms();          // whatever is loading is for the previous city
   showSkeleton(results);
   submitBtn.disabled = true;
 
@@ -170,8 +224,10 @@ async function lookup(rawQuery, { push = true } = {}) {
       return;
     }
 
-    cache.set(key, { summary: result.summary, facts: result.facts, news: result.news });
-    showCity(result.summary, result.facts, result.news);
+    cache.set(key, {
+      summary: result.summary, facts: result.facts, news: result.news, qid: result.qid
+    });
+    showCity(result.summary, result.facts, result.news, { qid: result.qid, cacheKey: key });
 
   } catch (err) {
     if (err.name === 'AbortError') return;
@@ -199,6 +255,7 @@ async function lookupRandom() {
   const signal = controller.signal;
 
   detachMap();
+  cancelFilms();
   showSkeleton(results);
   submitBtn.disabled = true;
   randomBtn.disabled = true;
@@ -218,10 +275,12 @@ async function lookupRandom() {
       if (!result.ok) continue;           // stub/disambiguation/reclassified — try again
 
       const key = title.toLowerCase();
-      cache.set(key, { summary: result.summary, facts: result.facts, news: result.news });
+      cache.set(key, {
+        summary: result.summary, facts: result.facts, news: result.news, qid: result.qid
+      });
       setUrl(result.summary.title);
       input.value = '';
-      showCity(result.summary, result.facts, result.news);
+      showCity(result.summary, result.facts, result.news, { qid: result.qid, cacheKey: key });
       return;
     }
 
@@ -309,6 +368,7 @@ window.addEventListener('popstate', event => {
     lookup(city, { push: false });
   } else {
     detachMap();
+    cancelFilms();
     input.value = '';
     while (results.firstChild) results.removeChild(results.firstChild);
     document.title = `${SITE_NAME} \u2014 Explore the world's cities`;

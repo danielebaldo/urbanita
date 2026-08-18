@@ -108,15 +108,18 @@ function renderFacts(facts) {
  * content. `flush` drops the padded body, for content that should meet the
  * edges.
  */
-function panel(modifier, { title, eyebrow = null, note = null, flush = false }, children) {
+function panelHead({ title, eyebrow = null, note = null }) {
   const head = el('div', { class: 'panel-head' }, [
     el('h3', { class: 'panel-title', text: title })
   ]);
   if (eyebrow) head.appendChild(el('span', { class: 'panel-eyebrow', text: eyebrow }));
   if (note) head.appendChild(el('p', { class: 'panel-note', text: note }));
+  return head;
+}
 
+function panel(modifier, { title, eyebrow = null, note = null, flush = false }, children) {
   return el('section', { class: 'panel panel--' + modifier }, [
-    head,
+    panelHead({ title, eyebrow, note }),
     flush ? children[0] : el('div', { class: 'panel-body' }, children)
   ]);
 }
@@ -153,8 +156,7 @@ function renderNews(news) {
     title: 'In the news',
     eyebrow: news.length === 1 ? '1 recent story' : `${news.length} recent stories`,
     note: 'Mostly recent pieces from a small set of selected sources \u2014 ' +
-          'chiefly urbanism, architecture and travel, sometimes culture or ' +
-          'sport \u2014 when there\u2019s any coverage of this city.'
+          'chiefly urbanism, architecture and travel, sometimes culture or sport'
   }, [el('div', { class: 'news' }, [list])]);
 }
 
@@ -183,10 +185,15 @@ export function showState(container, { heading, message, isError }) {
 /* -------------------------------------------------------------------------- */
 
 /**
- * A city renders as three stacked surfaces rather than one long card:
- * the city itself (hero photograph, summary, key facts), what's in the news,
- * and where it is. `.city` stacks and staggers them; each section is omitted
- * when there's nothing to put in it.
+ * A city renders as five separate surfaces rather than one long card: the
+ * city itself (hero photograph and summary), its key facts, where it is,
+ * what's in the news, and what's been filmed there. Each is omitted when
+ * there's nothing to put in it.
+ *
+ * Stacked in one column on narrow screens; on wide ones the two rails and
+ * the card become a tilted, lightly overlapping collage (see `.city` in
+ * css/style.css). The rails exist only to make that collage reflow when a
+ * card is missing — they're `display: contents` while stacked.
  */
 export function renderCity(container, data, { facts = null, news = [] } = {}) {
   clear(container);
@@ -240,11 +247,9 @@ export function renderCity(container, data, { facts = null, news = [] } = {}) {
     text: data.extract || 'Wikipedia has no summary for this entry yet.'
   }));
 
-  const factsBox = renderFacts(facts);
-  if (factsBox) card.appendChild(factsBox);
-
   // Coordinates head up the map section now, so the card's footer is just
-  // the credit.
+  // the credit. It stays in the card rather than being clipped away: every
+  // result linking back to its article is the CC BY-SA obligation.
   const url = data.content_urls?.desktop?.page;
   if (url) {
     card.appendChild(el('div', { class: 'card-meta' }, [
@@ -257,12 +262,27 @@ export function renderCity(container, data, { facts = null, news = [] } = {}) {
 
   sections.appendChild(card);
 
-  /* --- 2. What's in the news --------------------------------------- */
+  /* --- The rails ---------------------------------------------------- */
+
+  // Two wrappers, so that a card with nothing to show simply isn't there and
+  // the rest of its rail closes up. The alternative — one flat grid — needs
+  // a rule for every combination of what's missing. Below the collage
+  // breakpoint the rails are `display: contents`, so this nesting costs the
+  // stacked layout nothing.
+  const leftRail  = el('div', { class: 'city-rail city-rail--left' });
+  const rightRail = el('div', { class: 'city-rail city-rail--right' });
+
+  /* --- 2. Key facts, on their own --------------------------------- */
+
+  const factsBox = renderFacts(facts);
+  if (factsBox) leftRail.appendChild(el('div', { class: 'city-facts' }, [factsBox]));
+
+  /* --- 3. What's in the news --------------------------------------- */
 
   const newsPanel = renderNews(news);
-  if (newsPanel) sections.appendChild(newsPanel);
+  if (newsPanel) leftRail.appendChild(newsPanel);
 
-  /* --- 3. Where it is ---------------------------------------------- */
+  /* --- 4. Where it is ---------------------------------------------- */
 
   let mapContainer = null;
   if (data.coordinates) {
@@ -270,15 +290,68 @@ export function renderCity(container, data, { facts = null, news = [] } = {}) {
       class: 'map-container',
       'aria-label': 'Map showing ' + data.title
     });
-    sections.appendChild(panel('map', {
+    rightRail.appendChild(panel('map', {
       title: 'On the map',
       eyebrow: formatCoords(data.coordinates),
       flush: true
     }, [mapContainer]));
   }
 
+  /* --- 5. On film --------------------------------------------------- */
+
+  // Films arrive after the card is on screen (the Wikidata query can take a
+  // few seconds for a big city), so reserve the space now and let
+  // renderFilms fill it — or drop it, when there's nothing to show.
+  const filmsSlot = el('section', { class: 'panel panel--films' }, [
+    el('div', { class: 'films-skeleton', 'aria-hidden': 'true' },
+       [el('span'), el('span'), el('span')])
+  ]);
+  rightRail.appendChild(filmsSlot);
+
+  // Facts and news left, map and films right — so a city missing one of the
+  // sometimes-absent pieces (news, films) still has something on both sides.
+  if (leftRail.childNodes.length) sections.appendChild(leftRail);
+  if (rightRail.childNodes.length) sections.appendChild(rightRail);
+
   container.appendChild(sections);
-  return { mapContainer };
+  return { mapContainer, filmsSlot };
+}
+
+/**
+ * Fill (or remove) the films slot left by renderCity. Called once the
+ * Wikidata query lands, which is after the rest of the card is already on
+ * screen. An empty list removes the slot outright — same "no empty box"
+ * rule the news section follows.
+ */
+export function renderFilms(slot, films) {
+  if (!slot) return;
+  clear(slot);
+
+  if (!films || !films.length) {
+    if (slot.parentNode) slot.parentNode.removeChild(slot);
+    return;
+  }
+
+  const list = el('ul', { class: 'news-list film-list' });
+  films.forEach(film => {
+    const link = el('a', {
+      href: film.url, target: '_blank', rel: 'noopener', text: film.title
+    });
+    const item = el('li', null, [link]);
+    if (film.year) item.appendChild(el('span', { class: 'news-meta', text: String(film.year) }));
+    list.appendChild(item);
+  });
+
+  // Built straight into the slot, which is already in place in the grid —
+  // panel() would give us a second <section> to unwrap.
+  slot.appendChild(panelHead({
+    title: 'On film',
+    eyebrow: films.length === 1 ? '1 title' : `${films.length} titles`,
+    note: 'A few films set or shot here, best-known first'
+  }));
+  slot.appendChild(el('div', { class: 'panel-body' }, [
+    el('div', { class: 'films' }, [list])
+  ]));
 }
 
 /* --------------------------------------------------------------------------

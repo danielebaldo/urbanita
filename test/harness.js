@@ -163,12 +163,23 @@ export function installFakeLeaflet() {
     addTo(map) { this.map = map; map.layers.push(this); return this; }
   }
 
+  /* Leaflet's interaction handlers — the map turns the pointer-driven ones
+     off while the card is tilted, so they need to be inspectable. */
+  const handler = () => ({
+    enabled: true,
+    enable() { this.enabled = true; },
+    disable() { this.enabled = false; }
+  });
+
   class FakeMap {
     constructor(container, opts) {
       this.container = container;
       this.opts = opts;
       this.layers = [];
       this.removed = false;
+      this.dragging = handler();
+      this.doubleClickZoom = handler();
+      this.touchZoom = handler();
       instances.push(this);
     }
     removeLayer(layer) { this.layers = this.layers.filter(l => l !== layer); return this; }
@@ -190,30 +201,55 @@ export function installFakeLeaflet() {
    Fake matchMedia — lets tests drive the dark/light tile-swap listener.
    -------------------------------------------------------------------------- */
 
-export function installFakeMatchMedia(initialDark = false) {
-  const listeners = [];
-  let matches = initialDark;
+const DARK_QUERY = '(prefers-color-scheme: dark)';
 
-  const mql = {
-    get matches() { return matches; },
-    addEventListener(type, fn) { if (type === 'change') listeners.push(fn); },
-    removeEventListener(type, fn) {
-      if (type !== 'change') return;
-      const i = listeners.indexOf(fn);
-      if (i !== -1) listeners.splice(i, 1);
-    },
-    addListener(fn) { listeners.push(fn); },              // legacy Safari API
-    removeListener(fn) {
-      const i = listeners.indexOf(fn);
-      if (i !== -1) listeners.splice(i, 1);
+/**
+ * Tracks each media query separately. The map registers against two of them
+ * — the colour scheme and the collage breakpoint — and lumping them together
+ * would mean flipping the theme also fired the tilt listener, which the real
+ * browser would never do.
+ */
+export function installFakeMatchMedia(initialDark = false) {
+  const byQuery = new Map();          // query -> { listeners, matches }
+
+  function stateFor(query) {
+    if (!byQuery.has(query)) {
+      byQuery.set(query, { listeners: [], matches: query === DARK_QUERY ? initialDark : false });
     }
+    return byQuery.get(query);
+  }
+
+  // A fresh wrapper per call, as the real matchMedia does; they share the
+  // one listener list, so removing via a later object still works.
+  global.window.matchMedia = query => {
+    const state = stateFor(query);
+    return {
+      media: query,
+      get matches() { return state.matches; },
+      addEventListener(type, fn) { if (type === 'change') state.listeners.push(fn); },
+      removeEventListener(type, fn) {
+        if (type !== 'change') return;
+        const i = state.listeners.indexOf(fn);
+        if (i !== -1) state.listeners.splice(i, 1);
+      },
+      addListener(fn) { state.listeners.push(fn); },      // legacy Safari API
+      removeListener(fn) {
+        const i = state.listeners.indexOf(fn);
+        if (i !== -1) state.listeners.splice(i, 1);
+      }
+    };
   };
 
-  global.window.matchMedia = () => mql;
+  const fire = (query, value) => {
+    const state = stateFor(query);
+    state.matches = value;
+    state.listeners.slice().forEach(fn => fn({ matches: value, media: query }));
+  };
 
   return {
-    setDark(value) { matches = value; listeners.slice().forEach(fn => fn({ matches: value })); },
-    listenerCount: () => listeners.length
+    setDark: value => fire(DARK_QUERY, value),
+    setMatches: fire,
+    listenerCount: (query = DARK_QUERY) => stateFor(query).listeners.length
   };
 }
 
@@ -255,6 +291,29 @@ function route(url, world) {
   const u = new URL(url);
 
   if (world.down && world.down.test(url)) throw new Error('network down');
+
+  /* WDQS serves two different queries; P840 (narrative location) is only in
+     the films one. world.films maps a city QID to an array of
+     { title, year } — a missing entry means "no films", and 'ERROR' stands
+     in for the endpoint being unreachable. world.filmCalls counts real
+     requests, so tests can prove a cache hit didn't re-query. */
+  if (u.hostname === 'query.wikidata.org' && (u.searchParams.get('query') || '').includes('P840')) {
+    const qid = (u.searchParams.get('query').match(/wd:(Q\d+)/) || [])[1];
+    world.filmCalls = (world.filmCalls || 0) + 1;
+    const entry = (world.films || {})[qid];
+    if (entry === 'ERROR') throw new Error('WDQS down');
+    return json({
+      results: {
+        bindings: (entry || []).map(f => ({
+          article: {
+            value: 'https://en.wikipedia.org/wiki/' +
+                   encodeURIComponent(f.title).replace(/%20/g, '_')
+          },
+          year: f.year ? { value: String(f.year) } : undefined
+        }))
+      }
+    });
+  }
 
   /* WDQS — random city sampling. world.randomQueue is drained front-to-back,
      one entry per fetchRandomCityTitle() call: a title string, null (sampled

@@ -64,6 +64,18 @@ export function makeWorld(overrides = {}) {
       'Springfield (The Simpsons)': 'Q1077'
     },
 
+    /* Films set or shot in a city, keyed by QID (see fetchCityFilms).
+       Lisbon has some; Porto deliberately has none, so the "no films, no
+       empty panel" case is covered. Titles carry the Wikipedia
+       disambiguators the real data has, to exercise stripping them. */
+    films: {
+      Q597: [
+        { title: 'Night Train to Lisbon (film)', year: 2013 },
+        { title: 'The Russia House (film)', year: 1990 },
+        { title: 'Alive (2009 film)', year: null }
+      ]
+    },
+
     /* instance of */
     p31: {
       Q597:   ['Q515', 'Q5119'],        // city, capital        -> depth 0

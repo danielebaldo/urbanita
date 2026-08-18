@@ -152,8 +152,9 @@ function renderNews(news) {
   return panel('news', {
     title: 'In the news',
     eyebrow: news.length === 1 ? '1 recent story' : `${news.length} recent stories`,
-    note: 'Mostly recent pieces on urbanism and architecture, from a small ' +
-          'set of selected sources \u2014 when there\u2019s any coverage of this city.'
+    note: 'Mostly recent pieces from a small set of selected sources \u2014 ' +
+          'chiefly urbanism, architecture and travel, sometimes culture or ' +
+          'sport \u2014 when there\u2019s any coverage of this city.'
   }, [el('div', { class: 'news' }, [list])]);
 }
 

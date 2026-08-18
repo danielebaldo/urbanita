@@ -613,6 +613,12 @@ main {
   font-style: italic;
 }
 
+/* A note that's only true on a touch screen (the map's two-finger rule).
+   Hidden by default, and shown in the touch block near the end of this
+   file — but never while the collage is tilted, where the map takes no
+   gesture at all. */
+.panel-hint { display: none; }
+
 .card h2 {
   font-size: clamp(1.75rem, 4.5vw, 2.3rem);
   margin-bottom: .2rem;
@@ -772,8 +778,13 @@ main {
   opacity: 0;
   transition: opacity .18s ease;
 }
-.news-list li:hover { padding-left: .7rem; }
-.news-list li:hover::before { opacity: 1; }
+/* Only where there's a real pointer to hover with. A tap on a touch screen
+   leaves :hover stuck on the item it landed on, so without this the list
+   shunts sideways when you tap a headline and stays shunted. */
+@media (hover: hover) {
+  .news-list li:hover { padding-left: .7rem; }
+  .news-list li:hover::before { opacity: 1; }
+}
 
 .news-list a {
   display: block;
@@ -915,6 +926,59 @@ main {
   .panel-title { font-size: 1.15rem; }
   .panel-note { font-size: .78rem; margin-top: .4rem; }
   .map-container { height: 280px; }
+
+  /* The 140px floor misses a second column by a few pixels on a normal
+     phone, so five one-line facts became five full-width rows — the tallest
+     block on the page for the least in it. 120px pairs them from about
+     360px wide and still drops back to one column below that, where the
+     population figure would wrap awkwardly across two lines. */
+  .facts {
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 1rem 1.1rem;
+    padding: 1.15rem 1.3rem;
+  }
+}
+
+/* ==========================================================================
+   Touch
+
+   Keyed to the pointer rather than the width: what changes here is how
+   accurately the thing on the other end can aim, which a narrow window on a
+   laptop doesn't change and a wide tablet doesn't escape.
+
+   Every control the site owns was under 36px tall — the nav links were 16 —
+   against the ~44px a fingertip actually needs. The fix is padding, never
+   type size: the text stays exactly where it was and the target grows around
+   it, so nothing about the design shifts on a desktop that never sees this.
+   ========================================================================== */
+
+@media (pointer: coarse) {
+  /* The links carry the height now, so the bar itself gives most of its own
+     padding back and the header stays roughly the size it was. */
+  .site-nav { padding-block: .5rem; }
+  .site-nav ul { gap: .4rem; }
+  .site-nav ul a {
+    display: inline-block;
+    padding: .65rem .7rem;
+  }
+
+  .suggestions { gap: .4rem; }
+  .suggestions button { padding: .84rem 1.1rem; }
+
+  .random-btn { padding: .78rem 1.6rem; }
+
+  .theme-toggle { padding: .84rem 1.4rem; }
+
+  /* Full-width rows already, so only the height is short. */
+  .option-link { padding-block: .5rem; }
+}
+
+/* True only on touch, and only while the map is a stacked full-width band —
+   above the collage breakpoint it takes no gesture at all (js/map.js). Kept
+   as one flat query rather than nested inside the block above, which would
+   need CSS nesting support to do the same thing. */
+@media (pointer: coarse) and (max-width: 1199px) {
+  .panel-hint { display: block; }
 }
 
 /* ==========================================================================

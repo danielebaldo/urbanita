@@ -489,11 +489,59 @@ group('19. Light/dark switch');
   check('the live map swaps to dark tiles immediately',
     leafletInstances[0].tileUrl.includes('dark_all'), leafletInstances[0].tileUrl);
 
+  /* Both theme-color metas take the chosen colour, not just the one whose
+     media query happens to match: a manual choice is exactly the case those
+     queries can't see, so whichever the browser picks has to agree with the
+     page. */
+  check('both theme-color metas follow the manual choice to dark',
+    dom.metas.every(m => m.getAttribute('content') === '#27161e'),
+    dom.metas.map(m => m.getAttribute('content')).join(' '));
+
   toggle.click();
   check('toggling back sets light', dom.doc.documentElement.dataset.theme === 'light');
   check('persisted', dom.localStorage.getItem('urbanita-theme') === 'light');
   check('the live map swaps back to light tiles',
     leafletInstances[0].tileUrl.includes('light_all'), leafletInstances[0].tileUrl);
+  check('and the metas follow it back',
+    dom.metas.every(m => m.getAttribute('content') === '#fdeeed'),
+    dom.metas.map(m => m.getAttribute('content')).join(' '));
+}
+
+/* ========================================================================== */
+
+group('19b. A remembered choice reaches the theme-color metas on load');
+{
+  /* The inline <head> script applies a saved choice before first paint, but
+     deliberately touches nothing except the attribute — so on a page loaded
+     under an OS that disagrees, the metas start on the OS's colour and
+     js/theme.js has to catch them up without anyone clicking anything. */
+  const dom = installDom();
+  installFakeLeaflet();
+  installFakeMatchMedia(false);               // OS prefers light
+  installFetch(makeWorld());
+  dom.doc.documentElement.setAttribute('data-theme', 'dark');   // what the inline script did
+  await loadApp();
+
+  check('the saved dark choice is pushed to both metas at startup',
+    dom.metas.every(m => m.getAttribute('content') === '#27161e'),
+    dom.metas.map(m => m.getAttribute('content')).join(' '));
+}
+
+/* ========================================================================== */
+
+group('19c. Left alone when there is no manual choice');
+{
+  /* No saved choice means the metas' own media queries are already right,
+     and pinning them to today's OS setting would stop them tracking it. */
+  const dom = installDom();
+  installFakeLeaflet();
+  installFakeMatchMedia(true);                // OS prefers dark
+  installFetch(makeWorld());
+  await loadApp();
+
+  check('the metas keep their media-scoped defaults',
+    dom.metas.map(m => m.getAttribute('content')).join(' ') === '#fdeeed #27161e',
+    dom.metas.map(m => m.getAttribute('content')).join(' '));
 }
 
 /* ========================================================================== */
@@ -811,6 +859,43 @@ group('32. Map interaction follows the tilt');
   await settle();
   check('dragging is left alone when stacked',
     narrowMaps[narrowMaps.length - 1].dragging.enabled === true);
+}
+
+/* ========================================================================== */
+
+group('33. On touch the map gives the page its swipe back');
+{
+  /* A stacked map is a full-width band mid-page. With one-finger dragging on,
+     a swipe that lands on the tiles pans the map instead of scrolling past
+     it, and the reader is stuck. Two fingers still zoom and pan, via the
+     touch-zoom handler, and the +/- buttons never depended on any of this. */
+  const dom = installDom();
+  const maps = installFakeLeaflet();
+  const media = installFakeMatchMedia(false);
+  installFetch(makeWorld());
+  await loadApp();
+  media.setMatches('(pointer: coarse)', true);
+
+  submit(dom.els, 'Lisbon');
+  await settle();
+  const map = maps[maps.length - 1];
+  check('one-finger dragging is off on a touch screen', map.dragging.enabled === false);
+  check('pinch zoom still works', map.touchZoom.enabled === true);
+  check('a pointer listener was registered', media.listenerCount('(pointer: coarse)') === 1);
+
+  /* The tilt rule and the touch rule both speak for `dragging`, and the
+     tilted one is stricter. Crossing the breakpoint has to leave the touch
+     rule standing rather than handing dragging back on the way out. */
+  media.setMatches('(min-width: 1200px)', true);
+  check('tilting takes the rest away too', map.touchZoom.enabled === false);
+  media.setMatches('(min-width: 1200px)', false);
+  check('straightening restores pinch', map.touchZoom.enabled === true);
+  check('but dragging stays off — it is still a touch screen',
+    map.dragging.enabled === false);
+
+  /* And a pointer that gains precision gets the full map back. */
+  media.setMatches('(pointer: coarse)', false);
+  check('dragging returns on a fine pointer', map.dragging.enabled === true);
 }
 
 /* ========================================================================== */

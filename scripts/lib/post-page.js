@@ -46,6 +46,12 @@ export function renderPostPage({ title, excerpt, iso, display, bodyHtml }) {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
+<!-- Tints the mobile browser's own chrome to match the page, in whichever
+     theme is showing. js/theme.js rewrites both when the footer's switch is
+     used, so a manual choice moves the address bar with it. -->
+<meta name="theme-color" content="#fdeeed" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#27161e" media="(prefers-color-scheme: dark)">
+
 <title>${escapeHtml(title)} — Urbanìta</title>
 <meta name="description" content="${escapeHtml(excerpt)}">
 

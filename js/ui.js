@@ -108,18 +108,23 @@ function renderFacts(facts) {
  * content. `flush` drops the padded body, for content that should meet the
  * edges.
  */
-function panelHead({ title, eyebrow = null, note = null }) {
+function panelHead({ title, eyebrow = null, note = null, hint = null }) {
   const head = el('div', { class: 'panel-head' }, [
     el('h3', { class: 'panel-title', text: title })
   ]);
   if (eyebrow) head.appendChild(el('span', { class: 'panel-eyebrow', text: eyebrow }));
   if (note) head.appendChild(el('p', { class: 'panel-note', text: note }));
+  // A note that only applies to one kind of screen. It's always in the
+  // markup and hidden by `.panel-hint` (see the stylesheet) everywhere it
+  // isn't true — the condition is the pointer, which CSS can see and this
+  // code shouldn't have to guess at render time.
+  if (hint) head.appendChild(el('p', { class: 'panel-note panel-hint', text: hint }));
   return head;
 }
 
-function panel(modifier, { title, eyebrow = null, note = null, flush = false }, children) {
+function panel(modifier, { title, eyebrow = null, note = null, hint = null, flush = false }, children) {
   return el('section', { class: 'panel panel--' + modifier }, [
-    panelHead({ title, eyebrow, note }),
+    panelHead({ title, eyebrow, note, hint }),
     flush ? children[0] : el('div', { class: 'panel-body' }, children)
   ]);
 }
@@ -293,6 +298,10 @@ export function renderCity(container, data, { facts = null, news = [] } = {}) {
     rightRail.appendChild(panel('map', {
       title: 'On the map',
       eyebrow: formatCoords(data.coordinates),
+      // Only true on a touch screen, and only while the card is stacked —
+      // js/map.js gives up one-finger dragging there so a swipe scrolls the
+      // page instead of being eaten by the tiles.
+      hint: 'Two fingers to move the map',
       flush: true
     }, [mapContainer]));
   }

@@ -48,6 +48,33 @@ throughout. The hero rewrites the width in Wikipedia's thumbnail URL to get a
 usable size — see `heroImage` in `js/ui.js` for why only certain widths
 work.
 
+## On a phone
+
+Three things behave differently on touch, all decided by the pointer rather
+than the window width — an accurate pointer in a narrow window doesn't need
+any of it, and a tablet doesn't escape it by being wide.
+
+- **The map takes two fingers.** Stacked, it's a full-width band in the
+  middle of a scrolling page, and Leaflet's one-finger drag swallows the
+  swipe that lands on it — you try to scroll past the map and pan it
+  instead. So `js/map.js` gives up one-finger dragging on a coarse pointer,
+  the same trade `scrollWheelZoom: false` already makes for the wheel.
+  Pinch still zooms *and* pans (Leaflet's touch-zoom handler moves the
+  centre as it scales) and the +/- buttons are untouched. The map panel says
+  so in its header, via a note that only renders on touch (`.panel-hint`).
+- **Tap targets are ~44px.** Every control the site owns was under 36px, the
+  nav links 16. The touch block near the end of `css/style.css` grows them
+  with padding only, so the type stays exactly where it was and a desktop
+  sees no difference at all.
+- **Hover affordances stay off.** The news list's slide-in accent bar is
+  behind `@media (hover: hover)`: a tap would otherwise leave :hover stuck
+  on the headline it landed on, shunting the row sideways for good.
+
+Also: each page carries a `theme-color` meta pair so the mobile browser's
+own chrome takes the paper colour, and `js/theme.js` rewrites both when the
+footer's switch is used — the media queries on those metas can see the OS,
+but not a manual choice.
+
 ## Files
 
 ```
@@ -285,7 +312,7 @@ All paths are relative, so both naming schemes work unchanged.
 node test/run.js
 ```
 
-172 assertions, no npm install. Covers classification (including the subclass
+184 assertions, no npm install. Covers classification (including the subclass
 walk and the batching/caching behaviour), key facts (population, country,
 area, elevation, timezone — including partial/missing data and the
 entity-claims cache reuse), city news (the proxy client's request shape and
@@ -293,8 +320,10 @@ pass-through of results, and rendering/omitting the news section), films
 (title cleanup, the empty and unreachable cases, and that a cache hit
 doesn't re-query Wikidata), map
 lifecycle (attach/detach across searches, cache hits, back button,
-dark-mode tile swap), the light/dark switch (including that a manual
-choice overrides the OS in both directions), disambiguation, URL state, the
+dark-mode tile swap, and which interactions survive a tilt or a touch
+screen), the light/dark switch (including that a manual
+choice overrides the OS in both directions, and reaches the `theme-color`
+metas), disambiguation, URL state, the
 back button, request cancellation, XSS safety, and graceful degradation
 when Wikidata or the news proxy is unreachable. The Worker itself
 (`worker/news-proxy.js`) is verified manually — see its Known Limits above.

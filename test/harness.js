@@ -97,11 +97,25 @@ export function installDom({ search = '' } = {}) {
   els['city-input'].value = '';
 
   const documentElement = new Node('html');
+
+  /* The <meta name="theme-color"> pair every page carries in its <head>.
+     They're media-scoped, so they follow the OS on their own; js/theme.js
+     rewrites both when the switch is used, which is what needs testing. */
+  const metas = [['light', '#fdeeed'], ['dark', '#27161e']].map(([scheme, content]) => {
+    const meta = new Node('meta');
+    meta.setAttribute('name', 'theme-color');
+    meta.setAttribute('media', `(prefers-color-scheme: ${scheme})`);
+    meta.setAttribute('content', content);
+    return meta;
+  });
+
   const docListeners = {};
   const doc = {
     title: '',
     documentElement,
     getElementById: id => els[id] || null,
+    // Only the one selector js/theme.js asks for.
+    querySelectorAll: sel => (sel === 'meta[name="theme-color"]' ? metas.slice() : []),
     createElement: t => new Node(t),
     createTextNode: t => new TextNode(t),
     addEventListener(t, fn) { (docListeners[t] ||= []).push(fn); },
@@ -149,7 +163,7 @@ export function installDom({ search = '' } = {}) {
     }
   };
 
-  return { doc, els, loc, hist, win, historyLog, localStorage: global.localStorage };
+  return { doc, els, loc, hist, win, historyLog, metas, localStorage: global.localStorage };
 }
 
 /* --------------------------------------------------------------------------

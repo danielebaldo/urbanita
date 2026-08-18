@@ -25,14 +25,21 @@ Milestones 1–7 complete.
 Also: a manual light/dark switch in the footer (defaults to the OS
 preference, remembered after that) on every page.
 
+A result renders as three separate surfaces rather than one long card: the
+city (a full-bleed hero photograph with the name and description set into a
+scrim over it, then the summary and the key-facts grid), what's in the news,
+and where it is on the map. Each is omitted when there's nothing to put in
+it. The hero rewrites the width in Wikipedia's thumbnail URL to get a
+usable size — see `heroImage` in `js/ui.js` for why only certain widths
+work.
+
 ## Files
 
 ```
 index.html                    home page + search
 about.html                    project + author
 attribution.html              full data/library/font credits
-blog/index.html               journal index
-blog/building-urbanita.html   the first post
+blog/index.html               journal index (no posts yet)
 css/style.css                 design tokens and layout
 js/wiki.js                    Wikipedia + Wikidata calls, city classification (no DOM)
 js/news.js                    thin client for the news proxy, per city (no DOM)

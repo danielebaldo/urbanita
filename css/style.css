@@ -19,6 +19,17 @@
      would lose contrast in dark mode. */
   --ink-on-accent: #27161e;
 
+  /* Small-print accent (panel notes). A deeper terracotta than the link
+     colour: --terracotta itself only reaches 4.18:1 on --card in light
+     mode, which fails AA for text this size — this clears it at 5.15:1.
+     Dark mode can use the ordinary --terracotta, which is already 5.89:1
+     there. */
+  --note: #a54f30;
+
+  /* Always the light blush, in both themes — for type set over the hero
+     photograph, which is equally dark under either theme. */
+  --on-photo: #fdeeed;
+
   --shadow-sm: 0 1px 2px rgba(39, 22, 30, .05);
   --shadow-md: 0 4px 16px -4px rgba(39, 22, 30, .10),
                0 1px 3px rgba(39, 22, 30, .05);
@@ -41,6 +52,7 @@
     --ink:        #fdeeed;
     --ink-soft:   #b2a2a5;
     --terracotta: #e08a63;
+    --note:       #e08a63;
     /* --sage is intentionally unchanged: --ink-on-accent still clears
        ~5:1 against it, and it reads at ~5:1 against dark paper too, so
        it doesn't need a dark-mode variant. */
@@ -60,6 +72,7 @@
   --ink:        #fdeeed;
   --ink-soft:   #b2a2a5;
   --terracotta: #e08a63;
+  --note:       #e08a63;
   --stone:      #413037;
   --stone-deep: #56464c;
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, .3);
@@ -306,11 +319,12 @@ main {
 .results:empty { display: none; }
 
 .card {
+  --card-pad: 1.85rem;   /* the hero cancels this out to reach the edges */
   background: var(--card);
   border: 1px solid var(--stone);
   border-radius: var(--radius);
   box-shadow: var(--shadow-md);
-  padding: 1.85rem;
+  padding: var(--card-pad);
   animation: rise .35s cubic-bezier(.2, .7, .3, 1) both;
 }
 
@@ -319,12 +333,89 @@ main {
   to   { opacity: 1; transform: none; }
 }
 
+/* A result is three separate surfaces — the city, its news, its map —
+   stacked with real air between them and eased in one after the other, so
+   the eye reads them in order rather than as one undifferentiated slab. */
+
+.city {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.city > * {
+  animation: rise .45s cubic-bezier(.2, .7, .3, 1) both;
+}
+.city > :nth-child(2) { animation-delay: .08s; }
+.city > :nth-child(3) { animation-delay: .16s; }
+
 @media (prefers-reduced-motion: reduce) {
-  .card { animation: none; }
+  .card, .city > * { animation: none; }
   * { transition-duration: .01ms !important; }
 }
 
-.card-head { margin-bottom: 1.1rem; }
+/* Panels — the shared shell for the news and map sections. */
+
+.panel {
+  background: var(--card);
+  border: 1px solid var(--stone);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-md);
+  overflow: hidden;   /* clips the flush map to the rounded corners */
+}
+
+.panel-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: .2rem 1.25rem;
+  padding: 1.3rem 1.85rem 1.05rem;
+  border-bottom: 1px solid var(--stone);
+}
+
+.panel-title {
+  font-size: 1.28rem;
+  margin: 0;
+}
+
+/* Short editorial rule leading into the title. */
+.panel-title::before {
+  content: '';
+  display: inline-block;
+  width: 1.5rem;
+  height: 2px;
+  margin-right: .65rem;
+  vertical-align: .3em;
+  background: var(--terracotta);
+}
+
+.panel-eyebrow {
+  font-size: .74rem;
+  color: var(--ink-soft);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.panel-body { padding: 1.3rem 1.85rem 1.5rem; }
+
+/* Small print inside a panel's header — sets expectations about what the
+   panel holds before any of it is read, and sits above the header's rule so
+   it belongs to the heading rather than to the first item under it.
+   `flex-basis: 100%` drops it onto its own line beneath the title/eyebrow
+   row. No opacity here: the colour is picked for contrast (see --note), and
+   fading it would undo that. */
+.panel-note {
+  flex-basis: 100%;
+  margin: .5rem 0 0;
+  max-width: 60ch;
+  font-size: .82rem;
+  line-height: 1.5;
+  color: var(--note);
+  font-style: italic;
+}
 
 .card h2 {
   font-size: clamp(1.75rem, 4.5vw, 2.3rem);
@@ -342,18 +433,73 @@ main {
   margin: 0;
 }
 
-.card figure {
-  margin: 0 0 1.1rem;
-  float: right;
-  width: min(210px, 42%);
-  margin-left: 1.4rem;
+/* City hero — the article photograph runs the full width of the card's top
+   edge (negative margins cancel the card padding), with the name and
+   description set into a scrim over it. */
+
+.city-hero {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  min-height: 300px;
+  margin: calc(var(--card-pad) * -1) calc(var(--card-pad) * -1) 1.6rem;
+  /* -1px: the card's border sits outside its padding box. */
+  border-radius: calc(var(--radius) - 1px) calc(var(--radius) - 1px) 0 0;
+  overflow: hidden;
+  background: var(--stone-deep);   /* holds the space while the photo loads */
 }
 
-.card figure img {
+.city-hero-img {
+  position: absolute;
+  inset: 0;
   width: 100%;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--stone);
+  height: 100%;
+  object-fit: cover;
   display: block;
+}
+
+/* Warm scrim, heaviest at the foot where the type sits. Fixed colours
+   rather than theme tokens — it always covers a photograph. At .72 the
+   type clears AA even against a blown-out white image. */
+.city-hero::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top,
+    rgba(28, 14, 20, .90) 0%,
+    rgba(28, 14, 20, .72) 30%,
+    rgba(28, 14, 20, .30) 62%,
+    rgba(28, 14, 20, .08) 100%);
+}
+
+/* No photograph: same masthead, brand gradient instead of an image. */
+.city-hero--plain {
+  min-height: 190px;
+  background: linear-gradient(140deg, #4a2c39 0%, #2e1a23 55%, #1c0e14 100%);
+}
+.city-hero--plain::after { content: none; }
+
+/* The scrim is ::after, so it's the hero's last child and would paint over
+   the type on DOM order alone — z-index is what actually puts the type on
+   top, not position: relative by itself. */
+.city-hero-text {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  padding: 2rem var(--card-pad) 1.4rem;
+}
+
+.city-hero h2 {
+  color: var(--on-photo);
+  font-size: clamp(2rem, 6vw, 3rem);
+  margin-bottom: .35rem;
+  text-shadow: 0 1px 14px rgba(28, 14, 20, .55);
+}
+
+.city-hero .description {
+  color: var(--on-photo);
+  opacity: .9;
+  text-shadow: 0 1px 10px rgba(28, 14, 20, .55);
 }
 
 .card .extract {
@@ -392,60 +538,59 @@ main {
   font-variant-numeric: tabular-nums;
 }
 
-/* News */
-
-.news {
-  clear: both;
-  margin: 1.5rem 0 0;
-}
-
-.news-heading {
-  font-size: .78rem;
-  color: var(--ink-soft);
-  text-transform: uppercase;
-  letter-spacing: .04em;
-  margin: 0 0 .6rem;
-}
+/* News — headlines in their own panel (see `.panel` above) */
 
 .news-list {
   list-style: none;
   margin: 0;
   padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: .65rem;
 }
 
 .news-list li {
-  padding-bottom: .65rem;
+  position: relative;
+  padding: .8rem 0;
   border-bottom: 1px solid var(--stone);
+  transition: padding-left .18s ease;
 }
+.news-list li:first-child { padding-top: 0; }
 .news-list li:last-child { border-bottom: none; padding-bottom: 0; }
+
+/* Accent bar that slides in on hover, rather than a border that's always
+   shouting. */
+.news-list li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: .8rem;
+  bottom: .8rem;
+  width: 2px;
+  background: var(--terracotta);
+  opacity: 0;
+  transition: opacity .18s ease;
+}
+.news-list li:hover { padding-left: .7rem; }
+.news-list li:hover::before { opacity: 1; }
 
 .news-list a {
   display: block;
   color: var(--ink);
   font-weight: 500;
+  line-height: 1.4;
   text-decoration: none;
 }
-.news-list a:hover { color: var(--terracotta); text-decoration: underline; }
+.news-list a:hover { color: var(--terracotta); }
 
 .news-meta {
   display: block;
-  margin-top: .2rem;
+  margin-top: .25rem;
   font-size: .8rem;
   color: var(--ink-soft);
 }
 
-/* Map */
+/* Map — flush inside its panel, so the tiles meet the panel's edges. */
 
 .map-container {
-  clear: both;
-  height: 260px;
-  margin-top: 1.5rem;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--stone);
-  overflow: hidden;
+  height: 380px;
   background: var(--stone);   /* visible neutral panel if Leaflet never attaches */
 }
 
@@ -463,10 +608,6 @@ main {
   gap: .4rem 1.25rem;
   font-size: .86rem;
   color: var(--ink-soft);
-}
-
-.card-meta .coords {
-  font-variant-numeric: tabular-nums;
 }
 
 /* States */
@@ -557,15 +698,19 @@ main {
 
 @media (max-width: 560px) {
   .hero { padding-top: 3rem; }
-  .card { padding: 1.35rem; }
-  .card figure {
-    float: none;
-    width: 100%;
-    margin: 0 0 1.1rem;
-  }
+  .card { --card-pad: 1.35rem; }
+  .city-hero { min-height: 210px; margin-bottom: 1.3rem; }
+  .city-hero--plain { min-height: 150px; }
+  .city-hero-text { padding-top: 1.5rem; }
   .site-nav { gap: 1rem; }
   .site-nav ul { gap: 1rem; }
-  .map-container { height: 200px; }
+
+  .city { gap: 1.15rem; }
+  .panel-head { padding: 1.05rem 1.35rem .85rem; }
+  .panel-body { padding: 1.05rem 1.35rem 1.2rem; }
+  .panel-title { font-size: 1.15rem; }
+  .panel-note { font-size: .78rem; margin-top: .4rem; }
+  .map-container { height: 280px; }
 }
 
 /* ==========================================================================
@@ -688,4 +833,13 @@ ul.options li {
 .post-list .excerpt {
   margin: .35rem 0 0;
   color: var(--ink-soft);
+}
+
+/* Journal with nothing published yet — the .post-list rules above are kept
+   for when there is. */
+.post-empty {
+  color: var(--ink-soft);
+  font-style: italic;
+  padding-top: 1.35rem;
+  border-top: 1px solid var(--stone);
 }

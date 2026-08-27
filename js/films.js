@@ -24,29 +24,28 @@
      - No `SERVICE wikibase:label`. Deriving the title from the article URL
        (as fetchRandomCityTitle does) took New York from 16s to 4.8s, and
        avoids items whose label doesn't resolve coming back as "Q134773".
+     - The request itself — deadline, cancellation, and the retry that
+       covers WDQS's erratic latency (the same New York request measured
+       6.4s, 17.7s and a 502 on three consecutive tries) — lives in
+       js/wdqs.js, shared with the figures query.
 
    Measured after all that: Lisbon 0.4s, Bosco Gurin 1.3s, New York 4.8s.
    ========================================================================== */
 
-const WDQS = 'https://query.wikidata.org/sparql';
-
-// Matches js/wiki.js — Wikipedia asks browser clients to identify themselves
-// with Api-User-Agent, since the real User-Agent is locked down by browsers.
-const API_USER_AGENT = 'Urbanita/0.3 (https://urbanita.it)';
+import { queryWdqs } from './wdqs.js';
 
 const FILM_LIMIT = 6;
-
-/* WDQS is erratic on the heavy queries: the same New York request measured
-   6.4s, 17.7s and a 502 on three consecutive tries. The section fills in
-   after the card is already on screen, so slowness costs nothing except a
-   skeleton that would otherwise shimmer forever — hence a ceiling, past
-   which we give up and show no films, like any other failure here. */
-const TIMEOUT_MS = 20000;
 
 /** Wikipedia disambiguators: "Alive (2009 film)" -> "Alive". */
 const DISAMBIGUATOR = /\s*\([^)]*\b(?:film|movie)\b[^)]*\)\s*$/i;
 
-function query(qid) {
+/**
+ * Exported because worker/news-proxy.js builds the very same query
+ * server-side — the Worker takes a QID, never SPARQL, so it can't be used
+ * as an open query endpoint, and this stays the single definition of what
+ * "films for a city" means.
+ */
+export function filmsQuery(qid) {
   return `SELECT ?film (MIN(?yr) AS ?year) (SAMPLE(?art) AS ?article) ?links WHERE {
   VALUES ?rel { wdt:P840 wdt:P915 }
   ?film ?rel wd:${qid} ;
@@ -71,41 +70,13 @@ function titleFromArticle(url) {
  * Wikidata being unreachable all yield [], since "no films" is an expected,
  * valid state (most small towns have none), not an error the caller has to
  * handle specially. Only AbortError propagates, so a superseded search still
- * cancels cleanly.
+ * cancels cleanly. See js/wdqs.js for the retry behind it.
  */
 export async function fetchCityFilms(qid, signal) {
   if (!qid) return [];
 
-  // Aborts on either the deadline or the caller giving up.
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
-  const relay = () => controller.abort();
-  if (signal) {
-    if (signal.aborted) controller.abort();
-    else signal.addEventListener?.('abort', relay);
-  }
-
-  let data;
-  try {
-    const url = WDQS + '?format=json&query=' + encodeURIComponent(query(qid));
-    const res = await fetch(url, {
-      signal: controller.signal,
-      headers: { 'Accept': 'application/json', 'Api-User-Agent': API_USER_AGENT }
-    });
-    if (!res.ok) return [];
-    data = await res.json();
-  } catch (err) {
-    // Our own timeout is just "no films"; only the caller abandoning the
-    // search propagates, so a superseded lookup still unwinds cleanly.
-    if (err.name === 'AbortError' && signal?.aborted) throw err;
-    return [];
-  } finally {
-    clearTimeout(timer);
-    signal?.removeEventListener?.('abort', relay);
-  }
-
-  const bindings = data?.results?.bindings;
-  if (!Array.isArray(bindings)) return [];
+  const bindings = await queryWdqs(
+    { kind: 'films', qid, sparql: filmsQuery(qid) }, signal);
 
   return bindings
     .map(row => {

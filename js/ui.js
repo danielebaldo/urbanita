@@ -130,6 +130,38 @@ function panel(modifier, { title, eyebrow = null, note = null, hint = null, flus
 }
 
 /**
+ * A panel whose contents arrive after the card is already on screen — the
+ * Wikidata queries behind films and figures can take a few seconds on a big
+ * city, and nothing else should wait on them. Reserves the space with a
+ * shimmer; fillSlot() below either fills it in or takes it away.
+ */
+function deferredSlot(modifier) {
+  return el('section', { class: 'panel panel--' + modifier }, [
+    el('div', { class: 'panel-skeleton', 'aria-hidden': 'true' },
+       [el('span'), el('span'), el('span')])
+  ]);
+}
+
+/**
+ * Resolve a deferred slot. An empty list removes it outright — the same
+ * "no empty box" rule the news section follows. Built straight into the
+ * slot, which is already in place in the grid: panel() would give us a
+ * second <section> to unwrap.
+ */
+function fillSlot(slot, items, head, body) {
+  if (!slot) return;
+  clear(slot);
+
+  if (!items || !items.length) {
+    if (slot.parentNode) slot.parentNode.removeChild(slot);
+    return;
+  }
+
+  slot.appendChild(panelHead(head));
+  slot.appendChild(el('div', { class: 'panel-body' }, [body]));
+}
+
+/**
  * A handful of recent headlines mentioning the city, newest first. Empty
  * or missing news is expected (most small towns won't have any recent
  * English coverage) — no section is rendered rather than an empty one.
@@ -190,10 +222,10 @@ export function showState(container, { heading, message, isError }) {
 /* -------------------------------------------------------------------------- */
 
 /**
- * A city renders as five separate surfaces rather than one long card: the
- * city itself (hero photograph and summary), its key facts, where it is,
- * what's in the news, and what's been filmed there. Each is omitted when
- * there's nothing to put in it.
+ * A city renders as separate surfaces rather than one long card: the city
+ * itself (hero photograph and summary), its key facts, what's in the news,
+ * who was born there, where it is, and what's been filmed there. Each is
+ * omitted when there's nothing to put in it.
  *
  * Stacked in one column on narrow screens; on wide ones the two rails and
  * the card become a tilted, lightly overlapping collage (see `.city` in
@@ -282,10 +314,13 @@ export function renderCity(container, data, { facts = null, news = [] } = {}) {
   const factsBox = renderFacts(facts);
   if (factsBox) leftRail.appendChild(el('div', { class: 'city-facts' }, [factsBox]));
 
-  /* --- 3. What's in the news --------------------------------------- */
+  /* --- 3. Who was born here ---------------------------------------- */
 
-  const newsPanel = renderNews(news);
-  if (newsPanel) leftRail.appendChild(newsPanel);
+  // Deferred like the films below, and for the same reason. It goes in the
+  // left rail so each side has one panel that may yet vanish — the collage
+  // closes up either way, but it stays balanced more often this way.
+  const figuresSlot = deferredSlot('figures');
+  leftRail.appendChild(figuresSlot);
 
   /* --- 4. Where it is ---------------------------------------------- */
 
@@ -311,35 +346,35 @@ export function renderCity(container, data, { facts = null, news = [] } = {}) {
   // Films arrive after the card is on screen (the Wikidata query can take a
   // few seconds for a big city), so reserve the space now and let
   // renderFilms fill it — or drop it, when there's nothing to show.
-  const filmsSlot = el('section', { class: 'panel panel--films' }, [
-    el('div', { class: 'films-skeleton', 'aria-hidden': 'true' },
-       [el('span'), el('span'), el('span')])
-  ]);
+  const filmsSlot = deferredSlot('films');
   rightRail.appendChild(filmsSlot);
 
-  // Facts and news left, map and films right — so a city missing one of the
-  // sometimes-absent pieces (news, films) still has something on both sides.
+  // Facts and figures left; map and films right — so a city missing one of
+  // the sometimes-absent pieces still has something on both sides.
   if (leftRail.childNodes.length) sections.appendChild(leftRail);
   if (rightRail.childNodes.length) sections.appendChild(rightRail);
 
+  /* --- 6. What's in the news --------------------------------------- */
+
+  // Not in a rail: the news is the one section that isn't about the city as
+  // a standing fact, so on the collage it runs the full width underneath
+  // everything else rather than sitting alongside the facts. A direct child
+  // of .city, which is what lets the grid give it a row of its own; stacked,
+  // `order` puts it back among the rest.
+  const newsPanel = renderNews(news);
+  if (newsPanel) sections.appendChild(newsPanel);
+
   container.appendChild(sections);
-  return { mapContainer, filmsSlot };
+  return { mapContainer, filmsSlot, figuresSlot };
 }
 
 /**
  * Fill (or remove) the films slot left by renderCity. Called once the
  * Wikidata query lands, which is after the rest of the card is already on
- * screen. An empty list removes the slot outright — same "no empty box"
- * rule the news section follows.
+ * screen.
  */
 export function renderFilms(slot, films) {
-  if (!slot) return;
-  clear(slot);
-
-  if (!films || !films.length) {
-    if (slot.parentNode) slot.parentNode.removeChild(slot);
-    return;
-  }
+  if (!films || !films.length) return fillSlot(slot, films);
 
   const list = el('ul', { class: 'news-list film-list' });
   films.forEach(film => {
@@ -351,16 +386,45 @@ export function renderFilms(slot, films) {
     list.appendChild(item);
   });
 
-  // Built straight into the slot, which is already in place in the grid —
-  // panel() would give us a second <section> to unwrap.
-  slot.appendChild(panelHead({
+  fillSlot(slot, films, {
     title: 'On film',
     eyebrow: films.length === 1 ? '1 title' : `${films.length} titles`,
     note: 'A few films set or shot here, best-known first'
-  }));
-  slot.appendChild(el('div', { class: 'panel-body' }, [
-    el('div', { class: 'films' }, [list])
-  ]));
+  }, el('div', { class: 'films' }, [list]));
+}
+
+/**
+ * Fill (or remove) the figures slot left by renderCity — people born in the
+ * city who worked in one of Urbanita's fields. Same deferred lifecycle as
+ * the films above.
+ *
+ * The meta line is the occupation and the birth year, either of which can be
+ * missing: Wikidata may have no date, and an occupation only ever goes in
+ * when it's one this site named itself (see OCCUPATIONS in js/figures.js).
+ */
+export function renderFigures(slot, figures) {
+  if (!figures || !figures.length) return fillSlot(slot, figures);
+
+  const list = el('ul', { class: 'news-list figure-list' });
+  figures.forEach(figure => {
+    const link = el('a', {
+      href: figure.url, target: '_blank', rel: 'noopener', text: figure.name
+    });
+    const item = el('li', null, [link]);
+
+    const meta = [figure.occupation, figure.year ? 'b. ' + figure.year : null].filter(Boolean);
+    if (meta.length) {
+      item.appendChild(el('span', { class: 'news-meta', text: meta.join(' \u00B7 ') }));
+    }
+    list.appendChild(item);
+  });
+
+  fillSlot(slot, figures, {
+    title: 'Born here',
+    eyebrow: figures.length === 1 ? '1 name' : `${figures.length} names`,
+    note: 'People from the city who worked in architecture, design, ecology ' +
+          'or the social sciences \u2014 best-known first'
+  }, el('div', { class: 'figures' }, [list]));
 }
 
 /* --------------------------------------------------------------------------

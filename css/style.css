@@ -357,11 +357,12 @@ main {
   to   { opacity: 1; transform: rotate(var(--tilt, 0deg)); }
 }
 
-/* A result is five separate surfaces — the city, its facts, its map, its
-   news, its films — with real air between them and eased in one after the
-   other, so the eye reads them in order rather than as one undifferentiated
-   slab. Stacked in one column here; the collage arrangement is at the
-   bottom of this file, behind a min-width query. */
+/* A result is a set of separate surfaces — the city, its facts, its news,
+   the figures born there, its films, its map — with real air between them
+   and eased in one after the other, so the eye reads them in order rather
+   than as one undifferentiated slab. Stacked in one column here; the
+   collage arrangement is at the bottom of this file, behind a min-width
+   query. */
 
 .city {
   display: flex;
@@ -371,14 +372,15 @@ main {
 
 /* The rails only exist to group the collage's columns. Stacked, they step
    out of the way entirely and their cards become items of .city directly —
-   which is why `order` below can sequence all five as one list. */
+   which is why `order` below can sequence them all as one list. */
 .city-rail { display: contents; }
 
-.city-card   { order: 1; }
-.city-facts  { order: 2; }
-.panel--news { order: 3; }
-.panel--films{ order: 4; }
-.panel--map  { order: 5; }
+.city-card      { order: 1; }
+.city-facts     { order: 2; }
+.panel--news    { order: 3; }
+.panel--figures { order: 4; }
+.panel--films   { order: 5; }
+.panel--map     { order: 6; }
 
 /* Applied to the cards, never to the rails: a `display: contents` element
    has no box to animate, and animating both would double the fade. */
@@ -389,10 +391,11 @@ main {
 
 /* Staggered by identity rather than by :nth-child — the rails mean DOM
    position no longer tracks reading order. */
-.city-facts   { animation-delay: .08s; }
-.panel--map   { animation-delay: .12s; }
-.panel--news  { animation-delay: .16s; }
-.panel--films { animation-delay: .24s; }
+.city-facts     { animation-delay: .08s; }
+.panel--map     { animation-delay: .12s; }
+.panel--news    { animation-delay: .16s; }
+.panel--figures { animation-delay: .2s; }
+.panel--films   { animation-delay: .24s; }
 
 @media (prefers-reduced-motion: reduce) {
   .card,
@@ -448,13 +451,14 @@ main {
 
 .panel-body { padding: 1.3rem 1.85rem 1.5rem; }
 
-/* Films: a slot is rendered up front and filled once Wikidata answers (it
-   can take a few seconds for a big city), so the space is held and nothing
-   jumps when the list lands. An empty result removes the slot entirely. */
+/* Films and figures: each slot is rendered up front and filled once Wikidata
+   answers (it can take a few seconds for a big city), so the space is held
+   and nothing jumps when the list lands. An empty result removes the slot
+   entirely. */
 
-.films-skeleton { padding: 1.5rem 1.85rem; }
+.panel-skeleton { padding: 1.5rem 1.85rem; }
 
-.films-skeleton span {
+.panel-skeleton span {
   display: block;
   height: .75rem;
   border-radius: 4px;
@@ -463,25 +467,28 @@ main {
   animation: shimmer 1.4s ease-in-out infinite;
   margin-bottom: .7rem;
 }
-.films-skeleton span:nth-child(2) { width: 80%; }
-.films-skeleton span:nth-child(3) { width: 60%; margin-bottom: 0; }
+.panel-skeleton span:nth-child(2) { width: 80%; }
+.panel-skeleton span:nth-child(3) { width: 60%; margin-bottom: 0; }
 
 @media (prefers-reduced-motion: reduce) {
-  .films-skeleton span { animation: none; }
+  .panel-skeleton span { animation: none; }
 }
 
 /* Titles are longer than headlines and wrap more, so they get a touch more
    line height than .news-list gives them. */
-.film-list a { line-height: 1.35; }
-.film-list .news-meta { font-variant-numeric: tabular-nums; }
+.film-list a,
+.figure-list a { line-height: 1.35; }
+.film-list .news-meta,
+.figure-list .news-meta { font-variant-numeric: tabular-nums; }
 
 /* --------------------------------------------------------------------------
    The collage — wide screens only
 
-   Five cards pinned at slight angles and lapping over one another, the way
-   things fall on a desk: facts and map down the left, the city in the
-   middle, news and films down the right. Below this width everything falls
-   back to the single stacked column above.
+   Cards pinned at slight angles and lapping over one another, the way things
+   fall on a desk: facts and the figures born there down the left, the city
+   in the middle, map and films down the right, and the news running the
+   full width underneath them all. Below this width everything falls back to
+   the single stacked column above.
 
    Cards are sized by their content, not fixed: a long summary makes a taller
    card and the overlaps shift a little between cities, which is the point of
@@ -505,7 +512,7 @@ main {
   }
 
   /* `order` sequences the stacked column, where the rails are transparent and
-     all five cards are siblings. Inside the collage it has to be cleared
+     every card is a sibling. Inside the collage it has to be cleared
      everywhere: on .city's children grid-column does the placing, and within
      a rail the stacked ordering would otherwise put films above the map. DOM
      order governs here. */
@@ -545,8 +552,36 @@ main {
   .city-rail > * { z-index: 1; }
 
   /* Vertical stagger, so the columns don't read as three tidy lists. */
-  .city-rail--left  .panel--news  { margin-top: 2.5rem; }
-  .city-rail--right .panel--films { margin-top: 2.25rem; }
+  .city-rail--left  .panel--figures { margin-top: 2.25rem; }
+  .city-rail--right .panel--films   { margin-top: 2.25rem; }
+
+  /* The news runs the full width underneath the collage rather than sitting
+     in a rail. Everything above it is what a city *is* — its facts, its
+     shape on the map, the people and films it produced. The news is what
+     happens to be true this week, so it reads as a footer to the rest
+     rather than as one more column of reference. Row 2 is explicit for the
+     same reason the rails' row 1 is: auto-placement would strand it. */
+  .panel--news {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    margin-top: 1.5rem;
+    --tilt: -1deg;
+  }
+
+  /* At full width a five-item list would run as five very long lines, so it
+     breaks into columns instead. That makes every item an interior one:
+     the first/last exceptions the stacked list needs would now fire in the
+     wrong places, so they're reset to a single uniform rule. */
+  .panel--news .news-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    column-gap: 2.75rem;
+  }
+  .panel--news .news-list li:first-child { padding-top: .8rem; }
+  .panel--news .news-list li:last-child {
+    padding-bottom: .8rem;
+    border-bottom: 1px solid var(--stone);
+  }
 
   /* The angles. Kept small — past about 3deg the type starts to feel
      wonky rather than casual. Restated as a plain transform so the tilt
@@ -571,7 +606,7 @@ main {
   .city-rail .panel-head { padding: 1.15rem 1.35rem .95rem; }
   .city-rail .panel-body { padding: 1.15rem 1.35rem 1.3rem; }
   .city-rail .panel-title { font-size: 1.15rem; }
-  .city-rail .films-skeleton { padding: 1.3rem 1.35rem; }
+  .city-rail .panel-skeleton { padding: 1.3rem 1.35rem; }
 
   /* Title and count stack rather than sitting on one cramped line. */
   .city-rail .panel-eyebrow { flex-basis: 100%; }

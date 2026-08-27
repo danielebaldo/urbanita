@@ -1,6 +1,12 @@
 /* ==========================================================================
-   Urbanita — news proxy (Cloudflare Worker)
+   Urbanita — the site's Worker (Cloudflare)
 
+   Two jobs, on two paths:
+
+     /           news for a city (everything below)
+     /wikidata   the films and figures queries, cached — see WIKIDATA below
+
+   ---- News ----
    Sits between the site and its news sources:
      - hides the Currents API key (never shipped to the browser)
      - caches results per city for an hour, so real upstream requests stay
@@ -52,6 +58,50 @@
    a city already cached under old logic keeps serving the old result
    until that hour is up, even after a redeploy.
    ========================================================================== */
+
+/* ==========================================================================
+   WIKIDATA (/wikidata?kind=films|figures&qid=Q90)
+
+   Why this is here at all: WDQS answers the same query in half a second or
+   in forty, essentially at random, and the figures query for a city the
+   size of Berlin came in under the browser's 20s ceiling once in seven
+   tries. Rewriting the query didn't help — ranking in a subquery and
+   dropping the performer filter were both within the noise — because the
+   cost is a shared public endpoint scanning everyone born in a large city,
+   not the shape of the question.
+
+   Run here instead, it's off the critical path: nobody is watching a
+   skeleton, the budget can be generous, and the answer is cached per city
+   for a week. Only the first visitor to a city ever waits, and even a
+   visitor who gives up warms the cache for the next one — this Worker
+   finishes and stores the result whether or not the browser is still
+   listening.
+
+   The route takes a `kind` and a QID, never SPARQL: the query is built
+   here, from the very same builders the browser uses (js/films.js,
+   js/figures.js), so this can't be used as an open query endpoint and
+   there's still only one definition of each query. Wrangler bundles those
+   imports; they're pure logic with no DOM in them.
+
+   Failures are never cached. An empty result *is* cached — "no films here"
+   is a real answer, and re-asking it weekly is enough.
+   ========================================================================== */
+
+import { filmsQuery } from '../js/films.js';
+import { figuresQuery } from '../js/figures.js';
+
+const WDQS = 'https://query.wikidata.org/sparql';
+
+/* A week. Wikidata's answer to "who was born in Lisbon" does not change
+   hourly, and the whole point is that almost nobody pays the query cost. */
+const WIKIDATA_TTL_SECONDS = 604800;
+
+/* Far more generous than the browser's 20s, because nothing is waiting on
+   it here — but still short of WDQS's own 60s limit, so a doomed query is
+   dropped rather than held open. */
+const WIKIDATA_TIMEOUT_MS = 50000;
+
+const QUERY_BUILDERS = { films: filmsQuery, figures: figuresQuery };
 
 const CURRENTS_SEARCH = 'https://api.currentsapi.services/v1/search';
 const CACHE_TTL_SECONDS = 3600;   // 1 hour: fresh enough, keeps upstream calls rare
@@ -116,6 +166,11 @@ export default {
     }
 
     const url = new URL(request.url);
+
+    if (url.pathname === '/wikidata') {
+      return handleWikidata(url, request, ctx);
+    }
+
     const city = (url.searchParams.get('city') || '').trim();
     const country = (url.searchParams.get('country') || '').trim();
     if (!city) return jsonResponse({ articles: [] }, 400);
@@ -143,18 +198,93 @@ export default {
   }
 };
 
+/* --------------------------------------------------------------------------
+   /wikidata
+   -------------------------------------------------------------------------- */
+
+async function handleWikidata(url, request, ctx) {
+  const kind = (url.searchParams.get('kind') || '').trim();
+  const qid = (url.searchParams.get('qid') || '').trim();
+
+  // Both are strictly checked: this endpoint builds its own SPARQL, and a
+  // QID is the only thing a caller gets to influence.
+  const build = QUERY_BUILDERS[kind];
+  if (!build || !/^Q\d+$/.test(qid)) {
+    return jsonResponse({ bindings: [], error: 'bad request' }, 400);
+  }
+
+  const cache = caches.default;
+  const cacheKey = new Request(
+    `https://urbanita-wdqs-cache.internal/?kind=${kind}&qid=${qid}`, request);
+
+  const cached = await cache.match(cacheKey);
+  if (cached) return cached;
+
+  /* The query AND the cache write both go inside waitUntil, not just the
+     write. Cloudflare cancels a Worker when its client disconnects, so with
+     the query on the request path a visitor who gave up took the whole
+     thing down with them and nothing was cached — measured: a request
+     abandoned after 5s left the city still uncached 75s later. That is
+     precisely backwards, because the cities worth caching are the slow ones
+     nobody waits for. Now the work outlives the browser: the first visitor
+     may still see nothing, and every visit after that is instant. */
+  const work = (async () => {
+    const bindings = await runSparql(build(qid));
+    // A failure must not be cached for a week — it would turn one bad
+    // minute at WDQS into a city that has nobody in it until next Tuesday.
+    if (bindings === null) return null;
+
+    const response = jsonResponse({ bindings }, 200, WIKIDATA_TTL_SECONDS);
+    await cache.put(cacheKey, response.clone());
+    return response;
+  })();
+
+  ctx.waitUntil(work);
+
+  const response = await work;
+  return response ?? jsonResponse({ bindings: [], error: 'upstream unavailable' }, 502);
+}
+
+/**
+ * The bindings array, or null if WDQS couldn't be made to answer. Tried
+ * twice: roughly one request in nine came back 502 while this was being
+ * built, independently of the query.
+ */
+async function runSparql(sparql) {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const res = await fetch(WDQS + '?format=json&query=' + encodeURIComponent(sparql), {
+        headers: {
+          'Accept': 'application/json',
+          // Server-side we can set a real User-Agent, which is what
+          // Wikimedia's policy actually asks for; browsers can't.
+          'User-Agent': 'Urbanita/0.3 (https://urbanita.it)'
+        },
+        signal: AbortSignal.timeout(WIKIDATA_TIMEOUT_MS)
+      });
+      if (!res.ok) continue;
+      const data = await res.json();
+      const bindings = data?.results?.bindings;
+      if (Array.isArray(bindings)) return bindings;
+    } catch {
+      // timeout or transport error — fall through to the second attempt
+    }
+  }
+  return null;
+}
+
 function cacheKeyUrl(city, country) {
   return 'https://urbanita-news-cache.internal/?city=' +
     encodeURIComponent(city) + '&country=' + encodeURIComponent(country);
 }
 
-function jsonResponse(body, status) {
+function jsonResponse(body, status, maxAge = CACHE_TTL_SECONDS) {
   return new Response(JSON.stringify(body), {
     status,
     headers: {
       ...CORS_HEADERS,
       'Content-Type': 'application/json',
-      'Cache-Control': `public, max-age=${CACHE_TTL_SECONDS}`
+      'Cache-Control': `public, max-age=${maxAge}`
     }
   });
 }

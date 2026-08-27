@@ -11,7 +11,7 @@ keep an API key private and results cached.
 
 ## Status
 
-Milestones 1–8 complete.
+Milestones 1–9 complete.
 
 - [x] 1. Search + summary card
 - [x] 2. Disambiguation fallback ("Did you mean…?")
@@ -22,23 +22,30 @@ Milestones 1–8 complete.
 - [x] 6. About page, blog, attribution page
 - [x] 7. Fresh news per city (Currents API, via a small caching proxy)
 - [x] 8. "On film" per city (Wikidata narrative/filming location)
+- [x] 9. "Born here" per city (Wikidata place of birth, filtered by field)
 
 Also: a manual light/dark switch in the footer (defaults to the OS
 preference, remembered after that) on every page.
 
-A result renders as five separate surfaces rather than one long card: the
-city (a full-bleed hero photograph with the name and description set into a
+A result renders as separate surfaces rather than one long card: the city
+(a full-bleed hero photograph with the name and description set into a
 scrim over it, then the summary), its key facts, where it is on the map,
-what's in the news, and films set or shot there. Each is omitted when
-there's nothing to put in it.
+what's in the news, who was born there, and films set or shot there. Each
+is omitted when there's nothing to put in it.
 
 Below 1200px they stack in one column. Above it they become a collage —
-facts and map down the left, the city card in the middle, news and films
-down the right, tilted a degree or two and lapping over one another. Cards
-are sized by their content, so the composition breathes between cities
-rather than clipping anything. Two rail wrappers (`display: contents` while
-stacked) group the columns, which is what lets the collage close up when a
-city has no news, no films or no photograph.
+facts and figures down the left, the city card in the middle, map and films
+down the right, tilted a degree or two and lapping over one another, with
+the news running the full width underneath them all. Everything in the
+collage proper is what a city *is*; the news is what happens to be true
+this week, so it reads as a footer to the rest rather than as one more
+column of reference (and it breaks into columns at that width, rather than
+running as a few very long lines). Cards are sized by their content, so the
+composition breathes between cities rather than clipping anything. Two rail
+wrappers (`display: contents` while stacked) group the columns, which is
+what lets the collage close up when a city has no figures, no films or no
+photograph. Stacked, the order is unchanged: the news stays third, right
+after the facts.
 
 One consequence worth knowing: Leaflet has no rotation support, so while the
 map card is tilted the interactions that convert a screen point to a
@@ -86,11 +93,13 @@ css/style.css                 design tokens and layout
 js/wiki.js                    Wikipedia + Wikidata calls, city classification (no DOM)
 js/news.js                    thin client for the news proxy, per city (no DOM)
 js/films.js                   films set/shot in a city, via Wikidata SPARQL (no DOM)
+js/figures.js                 people born in a city, via Wikidata SPARQL (no DOM)
+js/wdqs.js                    the SPARQL request: proxy-first, deadline, cancel, retry (no DOM)
 js/ui.js                      rendering (no network)
 js/map.js                     Leaflet map lifecycle (the one third-party global)
 js/theme.js                   light/dark switch (every page)
 js/app.js                     wiring, URL state (index.html only)
-worker/news-proxy.js          Cloudflare Worker: Currents API key, cache, CORS (deployed separately)
+worker/news-proxy.js          Cloudflare Worker, two paths: news (/) and cached Wikidata (/wikidata)
 worker/wrangler.toml          Worker deploy config, for `npx wrangler deploy`
 test/                         Node test suite
 package.json                  only tells Node these are ES modules — nothing to install
@@ -235,6 +244,146 @@ cached, controlled origin instead of every visitor's own browser.
   Node module graph the test suite loads) — verify it manually after
   deploying.
 
+## How "Born here" works
+
+`js/figures.js` asks Wikidata (WDQS) for people whose **place of birth**
+(P19) is this city and whose **occupation** (P106) is one of the fields
+this site is actually about, ranked by how many Wikipedias cover them —
+the same "would anyone recognise this name?" stand-in the films use. No
+API key and no proxy: the city's QID is already in hand, and WDQS is
+public.
+
+The occupation list (`OCCUPATIONS` in `js/figures.js`) is a flat table of
+Q-IDs covering four families — the built environment (architect, urban
+planner, landscape architect, architectural historian…), design (graphic,
+industrial, interior, type), ecology (ecologist, environmentalist,
+conservationist), and the social sciences that study cities (sociologist,
+anthropologist, geographer). That table is both the filter and the labels:
+the query can only return a Q-ID that's already in it, so the occupation
+under each name needs no label service.
+
+### Known limits
+
+- **Sitelink fame is a blunt instrument.** Plenty of celebrities carry one
+  of these occupations as a secondary Wikidata tag, and they outrank the
+  people the section is for. Without a guard, New York's top names were
+  Paris Hilton and Sienna Miller (both tagged "fashion designer") ahead of
+  any sociologist, and Lisbon offered a singer tagged "architect" — so a
+  short `PERFORMERS` list (singer, actor, musician, TV presenter,
+  socialite, model) is subtracted from the results. It exists to stop a pop
+  career outranking the city's architects, not to adjudicate who counts as
+  a real designer.
+- **"fashion designer" (Q3501317) is deliberately not in the table.** It
+  was the biggest single source of that noise, it earned no place in the
+  top six of any city tried, and it was expensive: including it took
+  Barcelona from 8.3s to 25.2s and Milan to a 502.
+- **Occupation is exact-matched, not walked up `subclass of`.** Same
+  reason as the films query — the walk pushes the big cities past the 60s
+  WDQS limit. The cost is people typed only as something more specific
+  than the list.
+- **Place of birth is exact too.** Someone recorded as born in a borough,
+  a suburb or a hospital rather than the city itself won't appear; walking
+  P131 upward is likewise too slow.
+- Names are taken from the article URL with any trailing parenthetical
+  removed, since on a person's article that's always a disambiguator
+  ("Gisela (singer)", "Giuseppe Castiglione (Jesuit painter)"). Two people
+  who share a base name therefore display identically — each link still
+  goes to the right article.
+- A person with several listed occupations shows the one ranking highest in
+  `OCCUPATIONS`, whose **order is therefore load-bearing**: the built
+  environment first, then design, ecology, and the social sciences last.
+  Jane Jacobs is tagged both `urban planner` and `sociologist`, and reads
+  as the former because of it. (An earlier version used `SAMPLE(?job)` and
+  she genuinely alternated between the two across reloads.) Reordering that
+  table reorders the preference; nothing else depends on the sequence.
+- Wikidata's own tagging is occasionally generous (a politician tagged
+  "sociologist"). The names are real; the label under one is only as good
+  as Wikidata.
+- **WDQS latency is wildly inconsistent**, which is what the Worker cache
+  exists to absorb — see "Why the Wikidata queries go through the Worker"
+  below.
+- Measured against WDQS directly, on a good day: Porto 2.2s, Milan 2.7s,
+  Lisbon 4.3s, Barcelona 8.3s, New York 13.6s. Cached by the Worker, a
+  city that's been looked up before is immediate. Like the films, the
+  section fills in after the card is already on screen.
+
+## Why the Wikidata queries go through the Worker
+
+`js/films.js` and `js/figures.js` don't call WDQS themselves any more —
+`js/wdqs.js` asks the Worker's `/wikidata` route first, and only falls back
+to calling WDQS directly if the Worker isn't there.
+
+**The problem.** WDQS answers the same query in half a second or in forty,
+essentially at random. Measured over seven interleaved runs, the figures
+query for Berlin came in under the browser's 20s ceiling **once**; Paris
+four times in seven. A section that misses renders as "this city has
+nobody", which is indistinguishable from the truthful empty case.
+
+**What didn't work.** Rewriting the query. Ranking in a subquery, dropping
+the `MINUS` performer filter, and both together were all inside the noise —
+run-to-run variance on one variant (Paris, 8.5s / 23.3s / 17.2s) was larger
+than the gaps between variants. Berlin went from 1/7 to 2/7 under the
+ceiling at best. The cost isn't the shape of the question; it's a shared
+public endpoint scanning everyone born in a large city, on the critical
+path of a page load, while somebody watches a skeleton. Roughly 1 request
+in 9 also came back 502, independently of the query.
+
+**What did.** Moving the query off that path. The Worker runs it
+server-side with a 50s budget (nobody is watching) and caches the answer
+per city for a **week** — Wikidata's answer to "who was born in Paris" does
+not change hourly. Only the first visitor to a city ever waits.
+
+Some details that matter:
+
+- **The route takes a `kind` and a QID, never SPARQL**, so it can't be used
+  as an open query endpoint. The Worker builds the query with the very same
+  `filmsQuery`/`figuresQuery` builders the browser exports, so there's still
+  one definition of each query rather than a copy drifting out of sync.
+- **Failures are never cached; empty results are.** Caching a failure for a
+  week would turn one bad minute at WDQS into a city that has nobody in it
+  until next Tuesday. "No films here" is a real answer, and re-asking it
+  weekly is enough.
+- **The query runs inside `ctx.waitUntil`, not on the request path.**
+  Cloudflare cancels a Worker when its client disconnects, so with the query
+  awaited normally, a visitor who gave up took the whole thing down with
+  them and nothing was cached — measured: a request abandoned after 5s left
+  that city still uncached 75s later. That's exactly backwards, since the
+  cities worth caching are the slow ones nobody waits for. With the work in
+  `waitUntil` it outlives the browser, so a first visit that shows nothing
+  still makes every later visit instant.
+- **The cache is per-datacenter.** Cloudflare's `caches.default` is not
+  global, so a city warmed at one colo is still cold at another. Measured
+  live: a warm entry answers in 36–105ms, consistently — but a city warmed
+  moments earlier occasionally re-ran anyway (Naples, 3.1s, right after two
+  browser visits had warmed it), which is what an edge cache that isn't a
+  single shared store looks like. On a low-traffic site that means more cold
+  misses than the warm numbers suggest. The fix, if it ever matters, is
+  Workers KV, which replicates globally.
+- **A failed proxy is only worth going direct for when it failed *fast*.**
+  A 404, a refused connection or a malformed body means the Worker is
+  missing or broken, and WDQS direct is the better bet. A proxy that times
+  out was waiting on the very same WDQS, so falling back would just be a
+  second long wait for the same answer. That distinction is what keeps the
+  worst case at roughly one ceiling's wait rather than four.
+- **Until the Worker is redeployed, nothing breaks.** The old deployment
+  answers `/wikidata` with a 400, which reads as a fast failure, so the site
+  falls straight through to calling WDQS itself — exactly the behaviour it
+  had before. Verified live.
+
+### Redeploying after this change
+
+The Worker now serves two paths and imports the query builders from `js/`,
+so it needs `wrangler` to bundle it (the dashboard uploader can't):
+
+```sh
+cd worker
+npx wrangler deploy
+```
+
+`npx wrangler deploy --dry-run --outdir /tmp/wk-out` builds it without
+publishing, which is worth running first — it's how the bundling of those
+`../js/` imports was confirmed (13 KB, both queries inlined).
+
 ## Run locally
 
 ```sh
@@ -312,20 +461,27 @@ All paths are relative, so both naming schemes work unchanged.
 node test/run.js
 ```
 
-184 assertions, no npm install. Covers classification (including the subclass
+240 assertions, no npm install. Covers classification (including the subclass
 walk and the batching/caching behaviour), key facts (population, country,
 area, elevation, timezone — including partial/missing data and the
 entity-claims cache reuse), city news (the proxy client's request shape and
 pass-through of results, and rendering/omitting the news section), films
 (title cleanup, the empty and unreachable cases, and that a cache hit
-doesn't re-query Wikidata), map
+doesn't re-query Wikidata), figures born in the city (name cleanup,
+occupation labelling including a Q-ID outside the table, and that the two
+deferred sections neither cancel nor block each other), map
 lifecycle (attach/detach across searches, cache hits, back button,
 dark-mode tile swap, and which interactions survive a tilt or a touch
 screen), the light/dark switch (including that a manual
 choice overrides the OS in both directions, and reaches the `theme-color`
 metas), disambiguation, URL state, the
 back button, request cancellation, XSS safety, and graceful degradation
-when Wikidata or the news proxy is unreachable. The Worker itself
+when Wikidata or the news proxy is unreachable — including that a flaky
+WDQS is retried and recovers, that a genuinely dead one stops rather than
+looping, that an empty result is never retried, that both sections are
+served through the Worker when it's there, that a 404 or a refused
+connection falls back to calling WDQS directly, and that a Worker which
+merely hangs does *not* trigger that fallback. The Worker itself
 (`worker/news-proxy.js`) is verified manually — see its Known Limits above.
 
 ## Attribution

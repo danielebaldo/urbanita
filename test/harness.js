@@ -282,13 +282,21 @@ export function installFetch(world) {
       if (signal && signal.aborted) {
         const e = new Error('aborted'); e.name = 'AbortError'; return reject(e);
       }
-      if (signal) signal.addEventListener(() => {
+      // 'abort' matters: without the event name this registers a listener
+      // for a type that never fires, so an aborted request would hang here
+      // instead of rejecting — which is exactly what a deadline needs.
+      if (signal) signal.addEventListener('abort', () => {
         const e = new Error('aborted'); e.name = 'AbortError'; reject(e);
       });
 
       const done = () => {
-        try { resolve(route(url, world)); }
-        catch (e) { reject(e); }
+        try {
+          const answer = route(url, world);
+          // Resolving with a pending promise would lock this one to it, and
+          // the abort listener above could never reject — so a request that
+          // is meant to hang has to simply never resolve at all.
+          if (answer !== HANGS) resolve(answer);
+        } catch (e) { reject(e); }
       };
       if (world.delay) setTimeout(done, world.delay); else setImmediate(done);
     });
@@ -296,6 +304,95 @@ export function installFetch(world) {
 
   return calls;
 }
+
+/**
+ * The figures fixture for a city, in WDQS's response shape. world.figures
+ * maps a city QID to an array of { name, occupations, year } — a missing
+ * entry means "nobody", and 'ERROR' stands in for the endpoint being
+ * unreachable. world.figureFailures fails that many calls and then
+ * recovers, which is what WDQS's erratic latency looks like from here — the
+ * retry in js/wdqs.js is meant to paper over exactly that. world.figureCalls
+ * counts queries however they were served, so tests can prove a cache hit
+ * didn't re-query.
+ */
+function figureBindings(world, qid) {
+  world.figureCalls = (world.figureCalls || 0) + 1;
+  if ((world.figureFailures || 0) > 0) {
+    world.figureFailures--;
+    throw new Error('WDQS hiccup');
+  }
+  const entry = (world.figures || {})[qid];
+  if (entry === 'ERROR') throw new Error('WDQS down');
+  return (entry || []).map(f => ({
+    article: {
+      value: 'https://en.wikipedia.org/wiki/' + encodeURIComponent(f.name).replace(/%20/g, '_')
+    },
+    // GROUP_CONCAT hands back the entity URIs joined by "|".
+    occupations: f.occupations?.length
+      ? { value: f.occupations.map(o => 'http://www.wikidata.org/entity/' + o).join('|') }
+      : undefined,
+    year: f.year ? { value: String(f.year) } : undefined
+  }));
+}
+
+/** The films fixture for a city, same contract as figureBindings above. */
+function filmBindings(world, qid) {
+  world.filmCalls = (world.filmCalls || 0) + 1;
+  if ((world.filmFailures || 0) > 0) {
+    world.filmFailures--;
+    throw new Error('WDQS hiccup');
+  }
+  const entry = (world.films || {})[qid];
+  if (entry === 'ERROR') throw new Error('WDQS down');
+  return (entry || []).map(f => ({
+    article: {
+      value: 'https://en.wikipedia.org/wiki/' + encodeURIComponent(f.title).replace(/%20/g, '_')
+    },
+    year: f.year ? { value: String(f.year) } : undefined
+  }));
+}
+
+/**
+ * Collapse long waits to a handful of event-loop turns.
+ *
+ * js/wdqs.js is built out of deadlines (20s) and backoffs (500ms), and the
+ * behaviour worth testing — what it does when a request times out — would
+ * otherwise cost real wall-clock seconds per assertion. Short waits are left
+ * alone, so a fetch that is going to answer still answers well before any
+ * collapsed deadline fires; a fetch that never answers loses to it. Returns
+ * the function that puts the real clock back.
+ */
+export function installFastClock({ threshold = 100, turns = 5 } = {}) {
+  const realSetTimeout = global.setTimeout;
+  const realClearTimeout = global.clearTimeout;
+
+  global.setTimeout = (fn, ms, ...args) => {
+    if (ms < threshold) return realSetTimeout(fn, ms, ...args);
+    const handle = { fast: true, cancelled: false };
+    let left = turns;
+    const step = () => {
+      if (handle.cancelled) return;
+      if (--left <= 0) fn(...args);
+      else setImmediate(step);
+    };
+    setImmediate(step);
+    return handle;
+  };
+  global.clearTimeout = h => {
+    if (h && h.fast) h.cancelled = true;
+    else realClearTimeout(h);
+  };
+
+  return () => {
+    global.setTimeout = realSetTimeout;
+    global.clearTimeout = realClearTimeout;
+  };
+}
+
+/* A request that never answers — the caller's deadline is the only thing
+   that will end it. See done() in installFetch for why this can't just be a
+   promise that never settles. */
+const HANGS = Symbol('hangs');
 
 function json(body, status = 200) {
   return { ok: status >= 200 && status < 300, status, json: () => Promise.resolve(body) };
@@ -306,27 +403,46 @@ function route(url, world) {
 
   if (world.down && world.down.test(url)) throw new Error('network down');
 
-  /* WDQS serves two different queries; P840 (narrative location) is only in
-     the films one. world.films maps a city QID to an array of
-     { title, year } — a missing entry means "no films", and 'ERROR' stands
-     in for the endpoint being unreachable. world.filmCalls counts real
-     requests, so tests can prove a cache hit didn't re-query. */
+  /* WDQS — figures born in the city. P19 (place of birth) is only in this
+     one. See figureBindings() for what the world controls. */
+  if (u.hostname === 'query.wikidata.org' && (u.searchParams.get('query') || '').includes('wdt:P19 ')) {
+    const qid = (u.searchParams.get('query').match(/wdt:P19 wd:(Q\d+)/) || [])[1];
+    world.directCalls = (world.directCalls || 0) + 1;
+    return json({ results: { bindings: figureBindings(world, qid) } });
+  }
+
+  /* WDQS also serves the films query; P840 (narrative location) is only in
+     that one. See filmBindings() for what the world controls. */
   if (u.hostname === 'query.wikidata.org' && (u.searchParams.get('query') || '').includes('P840')) {
     const qid = (u.searchParams.get('query').match(/wd:(Q\d+)/) || [])[1];
-    world.filmCalls = (world.filmCalls || 0) + 1;
-    const entry = (world.films || {})[qid];
-    if (entry === 'ERROR') throw new Error('WDQS down');
-    return json({
-      results: {
-        bindings: (entry || []).map(f => ({
-          article: {
-            value: 'https://en.wikipedia.org/wiki/' +
-                   encodeURIComponent(f.title).replace(/%20/g, '_')
-          },
-          year: f.year ? { value: String(f.year) } : undefined
-        }))
-      }
-    });
+    world.directCalls = (world.directCalls || 0) + 1;
+    return json({ results: { bindings: filmBindings(world, qid) } });
+  }
+
+  /* The Worker's /wikidata route (js/wdqs.js tries this before WDQS). It
+     answers from the same fixtures as the direct routes, so every existing
+     expectation about films and figures holds whichever path served them;
+     world.proxyCalls vs world.directCalls is what tells them apart.
+
+     world.wdqsProxy picks the Worker's health:
+       undefined  — deployed and working (the default)
+       'MISSING'  — 404, i.e. not deployed yet: a *fast* failure, so the
+                    client is expected to fall back to WDQS directly
+       'DOWN'     — connection refused, also a fast failure
+       'SLOW'     — never answers, so the client's own deadline stops it:
+                    a *slow* failure, after which falling back is pointless
+                    because it would be waiting on the same WDQS again */
+  if (u.pathname === '/wikidata') {
+    world.proxyCalls = (world.proxyCalls || 0) + 1;
+    if (world.wdqsProxy === 'MISSING') return json({ error: 'not found' }, 404);
+    if (world.wdqsProxy === 'DOWN') throw new Error('connection refused');
+    if (world.wdqsProxy === 'SLOW') return HANGS;   // only the deadline ends it
+
+    const kind = u.searchParams.get('kind');
+    const qid = u.searchParams.get('qid');
+    if (kind === 'figures') return json({ bindings: figureBindings(world, qid) });
+    if (kind === 'films') return json({ bindings: filmBindings(world, qid) });
+    return json({ error: 'bad request' }, 400);
   }
 
   /* WDQS — random city sampling. world.randomQueue is drained front-to-back,

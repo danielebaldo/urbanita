@@ -1,5 +1,6 @@
 import {
-  installDom, installFetch, tick, loadApp, installFakeLeaflet, installFakeMatchMedia
+  installDom, installFetch, tick, loadApp, installFakeLeaflet, installFakeMatchMedia,
+  installFastClock
 } from './harness.js';
 import { makeWorld } from './world.js';
 
@@ -11,6 +12,20 @@ const check = (name, cond, extra) => {
 };
 
 const settle = () => tick(40);
+
+/* js/wdqs.js is built out of deadlines (20s) and backoffs (500ms), and the
+   behaviour worth testing — what it does when a request times out — would
+   otherwise cost real seconds per assertion. installFastClock() collapses
+   those to event-loop turns.
+
+   It's installed per group rather than globally: collapsing every long
+   timer at once changes the ordering other parts of the suite depend on
+   (the theme and random-city groups both went red under it). Each group
+   that needs it takes it, then hands the real clock back. */
+async function withFastClock(run) {
+  const restore = installFastClock();
+  try { await run(); } finally { restore(); }
+}
 
 async function boot({ search = '', world = makeWorld() } = {}) {
   const dom = installDom({ search });
@@ -740,7 +755,7 @@ group('29. Full app boot — films render');
     panels[0].textContent.includes('Night Train to Lisbon'), panels[0].textContent);
   check('shows the year', panels[0].textContent.includes('2013'));
   check('the skeleton is gone once the list lands',
-    panels[0].byClass('films-skeleton').length === 0);
+    panels[0].byClass('panel-skeleton').length === 0);
 
   const before = world.filmCalls;
   submit(els, 'Porto');
@@ -761,18 +776,20 @@ group('29. Full app boot — films render');
 
 group('30. Films degrade without blocking the card');
 {
-  const world = makeWorld();
-  world.films = { Q597: 'ERROR' };
-  const { els } = await boot({ world });
-  submit(els, 'Lisbon');
-  await settle();
+await withFastClock(async () => {
+    const world = makeWorld();
+    world.films = { Q597: 'ERROR' };
+    const { els } = await boot({ world });
+    submit(els, 'Lisbon');
+    await settle();
 
-  const out = els['results'].textContent;
-  check('city still shown when Wikidata is unreachable',
-    out.includes('largest city of Portugal'), out);
-  check('no error state', !out.includes('Something went wrong'));
-  check('no films panel left behind', els['results'].byClass('panel--films').length === 0);
-  check('the map still renders', els['results'].byClass('map-container').length === 1);
+    const out = els['results'].textContent;
+    check('city still shown when Wikidata is unreachable',
+      out.includes('largest city of Portugal'), out);
+    check('no error state', !out.includes('Something went wrong'));
+    check('no films panel left behind', els['results'].byClass('panel--films').length === 0);
+    check('the map still renders', els['results'].byClass('map-container').length === 1);
+});
 }
 
 /* ========================================================================== */
@@ -791,10 +808,18 @@ group('31. Collage structure');
     card.byClass('facts').length === 0 && els['results'].byClass('facts').length === 1);
   const left  = els['results'].byClass('city-rail--left')[0];
   const right = els['results'].byClass('city-rail--right')[0];
-  check('facts and news sit in the left rail',
-    left.byClass('city-facts').length === 1 && left.byClass('panel--news').length === 1);
+  check('facts and figures sit in the left rail',
+    left.byClass('city-facts').length === 1 && left.byClass('panel--figures').length === 1);
   check('map and films sit in the right rail',
     right.byClass('panel--map').length === 1 && right.byClass('panel--films').length === 1);
+  /* The news is the one section that isn't about the city as a standing
+     fact, so it sits outside both rails as a direct child of .city — that's
+     what lets the collage give it a full-width row underneath everything.
+     In neither rail, and not nested in the card either. */
+  check('the news sits in neither rail',
+    left.byClass('panel--news').length === 0 && right.byClass('panel--news').length === 0);
+  check('the news is a direct child of .city, like the card',
+    city.childNodes.filter(n => (n.className || '').includes('panel--news')).length === 1);
   // The point of the split: news and films are often absent, facts and the
   // map almost never are, so each side keeps one dependable card.
   check('each rail holds one near-always-present card',
@@ -817,10 +842,20 @@ group('31. Collage structure');
   const bare = await boot({ world });
   submit(bare.els, 'Nowhere');
   await settle();
-  check('no left rail at all when there are neither facts nor news',
-    bare.els['results'].byClass('city-rail--left').length === 0);
+  /* Both rails hold a deferred slot now (figures left, films right), so both
+     are in the DOM while Wikidata is still thinking — and both empty out
+     rather than leaving a panel behind. The grid tracks are fixed either
+     way, so an emptied rail reserves nothing the full one wouldn't. */
+  check('the left rail is there while the figures are being fetched',
+    bare.els['results'].byClass('city-rail--left').length === 1);
   check('the right rail survives it (films are still being fetched)',
     bare.els['results'].byClass('city-rail--right').length === 1);
+  check('neither deferred panel is left behind once both come back empty',
+    bare.els['results'].byClass('panel--figures').length === 0 &&
+    bare.els['results'].byClass('panel--films').length === 0);
+  check('nor is a facts box or a map invented for it',
+    bare.els['results'].byClass('city-facts').length === 0 &&
+    bare.els['results'].byClass('map-container').length === 0);
 }
 
 /* ========================================================================== */
@@ -896,6 +931,248 @@ group('33. On touch the map gives the page its swipe back');
   /* And a pointer that gains precision gets the full map back. */
   media.setMatches('(pointer: coarse)', false);
   check('dragging returns on a fine pointer', map.dragging.enabled === true);
+}
+
+/* ========================================================================== */
+
+group('34. Figures (figures.js)');
+{
+  const { fetchCityFigures, OCCUPATIONS } = await import('../js/figures.js');
+  const world = makeWorld();
+  installDom();
+  installFetch(world);
+
+  check('no QID means no query at all', (await fetchCityFigures(null)).length === 0);
+
+  const figures = await fetchCityFigures('Q597');
+  check('returns the fixture figures', figures.length === 3, figures.length);
+  check('keeps a plain name as it is',
+    figures[0].name === 'Marquis of Pombal', figures[0].name);
+  check('strips the "(architect)" disambiguator',
+    figures[1].name === 'Maria Silva', figures[1].name);
+  /* Pombal is tagged sociologist *and* urban planner, in that order. The
+     label has to be the one ranking higher in OCCUPATIONS, not whichever
+     came back first — otherwise the same person reads differently between
+     loads, which is what SAMPLE(?job) used to do. */
+  check('ranks the occupation by the table, not by response order',
+    figures[0].occupation === 'urban planner', figures[0].occupation);
+  check('an occupation outside the table stays null',
+    figures[2].occupation === null, figures[2].occupation);
+  check('keeps the birth year', figures[0].year === 1699, figures[0].year);
+  check('a missing year stays null', figures[1].year === null, figures[1].year);
+  check('links to the English Wikipedia article',
+    figures[1].url === 'https://en.wikipedia.org/wiki/Maria_Silva_(architect)', figures[1].url);
+
+  check('a city with nobody yields an empty array',
+    (await fetchCityFigures('Q36433')).length === 0);
+
+  /* The query is only ever as good as the occupation list, and the labels
+     come from that same table — an entry without one would render a name
+     with no line under it. */
+  check('every occupation in the table has a label',
+    Object.values(OCCUPATIONS).every(label => typeof label === 'string' && label.length));
+
+  /* The ranking is the table's own order, so the families have to stay in
+     it: the built environment first, the social sciences last. This is the
+     property that makes Jane Jacobs an urban planner rather than a
+     sociologist, and it breaks silently if the table is ever resorted. */
+  const order = Object.keys(OCCUPATIONS);
+  check('urban planner outranks sociologist',
+    order.indexOf('Q131062') < order.indexOf('Q2306091'));
+  check('architect outranks sociologist',
+    order.indexOf('Q42973') < order.indexOf('Q2306091'));
+  check('design outranks the social sciences',
+    order.indexOf('Q5322166') < order.indexOf('Q4773904'));
+
+  world.figures = { Q597: 'ERROR' };
+  check('an unreachable endpoint yields [], not a throw',
+    (await fetchCityFigures('Q597')).length === 0);
+}
+
+/* ========================================================================== */
+
+group('35. Full app boot — figures render');
+{
+  const { els, world } = await boot();
+  submit(els, 'Lisbon');
+  await settle();
+
+  const panels = els['results'].byClass('panel--figures');
+  check('figures panel renders for Lisbon', panels.length === 1);
+  const links = panels[0].findAll('A');
+  check('one link per figure', links.length === 3, links.length);
+  check('shows the cleaned name',
+    panels[0].textContent.includes('Maria Silva'), panels[0].textContent);
+  check('shows the occupation', panels[0].textContent.includes('urban planner'));
+  check('shows the birth year', panels[0].textContent.includes('b. 1699'));
+  check('the skeleton is gone once the list lands',
+    panels[0].byClass('panel-skeleton').length === 0);
+
+  const before = world.figureCalls;
+  submit(els, 'Porto');
+  await settle();
+  check('no figures panel at all when the city has nobody (no empty box)',
+    els['results'].byClass('panel--figures').length === 0);
+  check('a city with nobody still queried once', world.figureCalls === before + 1);
+
+  submit(els, 'Lisbon');          // cache hit
+  await settle();
+  check('cache hit re-renders the figures without querying again',
+    world.figureCalls === before + 1, world.figureCalls);
+  check('figures still on screen after the cache hit',
+    els['results'].byClass('panel--figures').length === 1);
+
+  /* Both deferred sections run off the same lifecycle now — the films must
+     not have been cancelled by the figures starting, or vice versa. */
+  check('films rendered alongside the figures',
+    els['results'].byClass('panel--films').length === 1);
+}
+
+/* ========================================================================== */
+
+group('36. Figures degrade without blocking the card');
+{
+await withFastClock(async () => {
+    const world = makeWorld();
+    world.figures = { Q597: 'ERROR' };
+    const { els } = await boot({ world });
+    submit(els, 'Lisbon');
+    await settle();
+
+    const out = els['results'].textContent;
+    check('city still shown when Wikidata is unreachable',
+      out.includes('largest city of Portugal'), out);
+    check('no error state', !out.includes('Something went wrong'));
+    check('no figures panel left behind',
+      els['results'].byClass('panel--figures').length === 0);
+    check('the films are unaffected by the figures failing',
+      els['results'].byClass('panel--films').length === 1);
+    check('the map still renders', els['results'].byClass('map-container').length === 1);
+});
+}
+
+/* ========================================================================== */
+
+group('37. A flaky WDQS is retried, not surrendered to');
+{
+await withFastClock(async () => {
+    /* The failure this exists for: WDQS answering the same query in 0.5s once
+       and timing out the next time. Without a retry the section silently
+       renders as "this city has nobody", which is indistinguishable from the
+       truthful empty case — the worst way to be wrong. */
+    const world = makeWorld();
+    world.figureFailures = 1;
+    world.filmFailures = 1;
+    const { els } = await boot({ world });
+    submit(els, 'Lisbon');
+    await settle();
+
+    check('the figures still render after one failed attempt',
+      els['results'].byClass('panel--figures').length === 1);
+    check('and so do the films',
+      els['results'].byClass('panel--films').length === 1);
+    check('the figures query really was made twice',
+      world.figureCalls === 2, world.figureCalls);
+    check('the films query really was made twice',
+      world.filmCalls === 2, world.filmCalls);
+    check('the retried list has every name, not a partial one',
+      els['results'].byClass('panel--figures')[0].findAll('A').length === 3);
+
+    /* Two attempts, not endless ones: an endpoint that is genuinely down
+       should cost one extra round trip and then be let go. */
+    const down = makeWorld();
+    down.figures = { Q597: 'ERROR' };
+    const second = await boot({ world: down });
+    submit(second.els, 'Lisbon');
+    await settle();
+    /* One ask of the proxy, which fails fast because the endpoint behind it
+       is refusing, then the two direct attempts it falls back to. Bounded,
+       which is the point — it doesn't keep going. */
+    check('a truly unreachable endpoint stops after proxy-then-retry',
+      down.figureCalls === 3, down.figureCalls);
+    check('and leaves no panel behind',
+      second.els['results'].byClass('panel--figures').length === 0);
+
+    /* An empty answer is a real answer — retrying it would double every
+       query for the many small towns that genuinely have nobody. */
+    const empty = makeWorld();
+    const third = await boot({ world: empty });
+    submit(third.els, 'Porto');          // classifies as a city, has no figures
+    await settle();
+    check('an empty result is not retried', empty.figureCalls === 1, empty.figureCalls);
+});
+}
+
+/* ========================================================================== */
+
+group('38. Wikidata goes through the Worker, and survives it not being there');
+{
+  /* The whole point of the proxy: the slow query runs server-side and is
+     cached per city, so the browser stops paying for WDQS's mood. */
+  const world = makeWorld();
+  const { els } = await boot({ world });
+  submit(els, 'Lisbon');
+  await settle();
+
+  check('both sections render through the proxy',
+    els['results'].byClass('panel--figures').length === 1 &&
+    els['results'].byClass('panel--films').length === 1);
+  check('the proxy was asked once per section', world.proxyCalls === 2, world.proxyCalls);
+  check('and WDQS was never called directly',
+    (world.directCalls || 0) === 0, world.directCalls);
+  check('the proxied data is the real data, not a placeholder',
+    els['results'].byClass('panel--figures')[0].textContent.includes('urban planner'));
+
+  /* Not deployed yet — a 404 is a fast failure, so the site should behave
+     exactly as it did before the Worker existed. */
+  const undeployed = makeWorld();
+  undeployed.wdqsProxy = 'MISSING';
+  const second = await boot({ world: undeployed });
+  submit(second.els, 'Lisbon');
+  await settle();
+  check('a 404 from the proxy falls back to WDQS directly',
+    (undeployed.directCalls || 0) === 2, undeployed.directCalls);
+  check('and the sections still render',
+    second.els['results'].byClass('panel--figures').length === 1 &&
+    second.els['results'].byClass('panel--films').length === 1);
+
+  /* Same for a Worker that refuses the connection outright. */
+  const down = makeWorld();
+  down.wdqsProxy = 'DOWN';
+  const third = await boot({ world: down });
+  submit(third.els, 'Lisbon');
+  await settle();
+  check('a refused connection also falls back',
+    (down.directCalls || 0) === 2, down.directCalls);
+  check('and still renders', third.els['results'].byClass('panel--figures').length === 1);
+}
+
+/* ========================================================================== */
+
+group('39. A slow proxy is not worth a slow retry direct');
+{
+await withFastClock(async () => {
+    /* A proxy that times out was waiting on the very same WDQS. Going direct
+       afterwards would just be a second long wait for the same answer, so the
+       client gives up instead — this is what keeps the worst case at roughly
+       one ceiling rather than four. */
+    const slow = makeWorld();
+    slow.wdqsProxy = 'SLOW';
+    const { els } = await boot({ world: slow });
+    submit(els, 'Lisbon');
+    await settle();
+
+    check('the card still renders while the proxy hangs',
+      els['results'].byClass('city-card').length === 1);
+    check('no error state', !els['results'].textContent.includes('Something went wrong'));
+    check('the proxy was retried once, then let go',
+      slow.proxyCalls === 4, slow.proxyCalls);      // 2 attempts x 2 sections
+    check('WDQS was NOT called directly after a slow proxy',
+      (slow.directCalls || 0) === 0, slow.directCalls);
+    check('and neither deferred panel is left behind',
+      els['results'].byClass('panel--figures').length === 0 &&
+      els['results'].byClass('panel--films').length === 0);
+});
 }
 
 /* ========================================================================== */

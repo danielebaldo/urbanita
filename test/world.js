@@ -76,6 +76,23 @@ export function makeWorld(overrides = {}) {
       ]
     },
 
+    /* People born in a city who work in one of Urbanita's fields, keyed by
+       QID (see fetchCityFigures). Each person carries every occupation
+       Wikidata has for them, as Q-IDs; js/figures.js picks the one ranking
+       highest in its own OCCUPATIONS table and labels it from there. So:
+       Pombal holds two (listed worst-first, to prove the ranking isn't just
+       taking the first one), and Q999999 covers an occupation the table
+       doesn't know. Lisbon has some; Porto deliberately has none, so the
+       "nobody, no empty panel" case is covered. Names carry the Wikipedia
+       disambiguators the real data has, to exercise stripping them. */
+    figures: {
+      Q597: [
+        { name: 'Marquis of Pombal', occupations: ['Q2306091', 'Q131062'], year: 1699 },
+        { name: 'Maria Silva (architect)', occupations: ['Q42973'], year: null },
+        { name: 'Ana Costa', occupations: ['Q999999'], year: 1912 }
+      ]
+    },
+
     /* instance of */
     p31: {
       Q597:   ['Q515', 'Q5119'],        // city, capital        -> depth 0

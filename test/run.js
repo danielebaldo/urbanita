@@ -493,7 +493,11 @@ group('19. Light/dark switch');
   submit(els, 'Lisbon');
   await settle();
   check('map attaches with light tiles, matching the OS',
-    leafletInstances[0].tileUrl.includes('light_all'), leafletInstances[0].tileUrl);
+    leafletInstances[0].tileUrl.includes('Light_Gray'), leafletInstances[0].tileUrl);
+  /* Esri keeps place names in a layer of their own, so each theme is a base
+     plus a transparent label layer — two tile layers, and the marker. */
+  const layerCount = leafletInstances[0].layers.length;
+  check('both the base and its labels are added', layerCount === 3, layerCount);
 
   toggle.click();
   check('data-theme set to dark', dom.doc.documentElement.dataset.theme === 'dark');
@@ -502,7 +506,15 @@ group('19. Light/dark switch');
     toggle.getAttribute('aria-pressed') === 'true' && toggle.textContent.includes('Light'),
     toggle.textContent);
   check('the live map swaps to dark tiles immediately',
-    leafletInstances[0].tileUrl.includes('dark_all'), leafletInstances[0].tileUrl);
+    leafletInstances[0].tileUrl.includes('Dark_Gray'), leafletInstances[0].tileUrl);
+  /* Every layer of the old scheme has to come off, not just the base: a
+     light base left underneath would show through the new dark one, and a
+     stale label layer would print the names twice. */
+  check('swapping replaces both layers rather than stacking them',
+    leafletInstances[0].layers.length === 3, leafletInstances[0].layers.length);
+  check('no light tiles left anywhere on the map',
+    leafletInstances[0].layers.every(l => !(l.url || '').includes('Light_Gray')),
+    leafletInstances[0].layers.map(l => l.url).join(' '));
 
   /* Both theme-color metas take the chosen colour, not just the one whose
      media query happens to match: a manual choice is exactly the case those
@@ -516,7 +528,7 @@ group('19. Light/dark switch');
   check('toggling back sets light', dom.doc.documentElement.dataset.theme === 'light');
   check('persisted', dom.localStorage.getItem('urbanita-theme') === 'light');
   check('the live map swaps back to light tiles',
-    leafletInstances[0].tileUrl.includes('light_all'), leafletInstances[0].tileUrl);
+    leafletInstances[0].tileUrl.includes('Light_Gray'), leafletInstances[0].tileUrl);
   check('and the metas follow it back',
     dom.metas.every(m => m.getAttribute('content') === '#fdeeed'),
     dom.metas.map(m => m.getAttribute('content')).join(' '));
@@ -574,19 +586,19 @@ group('20. A manual theme choice overrides the OS, in both directions');
   submit(els, 'Lisbon');
   await settle();
   check('OS dark: map defaults to dark tiles',
-    leafletInstances[0].tileUrl.includes('dark_all'), leafletInstances[0].tileUrl);
+    leafletInstances[0].tileUrl.includes('Dark_Gray'), leafletInstances[0].tileUrl);
 
   els['theme-toggle'].click();   // force light despite the OS being dark
   check('forcing light overrides an OS set to dark',
-    leafletInstances[0].tileUrl.includes('light_all'), leafletInstances[0].tileUrl);
+    leafletInstances[0].tileUrl.includes('Light_Gray'), leafletInstances[0].tileUrl);
 
   media.setDark(false);
   check('OS flipping to light while already forced light: stays light',
-    leafletInstances[0].tileUrl.includes('light_all'), leafletInstances[0].tileUrl);
+    leafletInstances[0].tileUrl.includes('Light_Gray'), leafletInstances[0].tileUrl);
 
   media.setDark(true);
   check('OS flipping back to dark does not override the manual light choice',
-    leafletInstances[0].tileUrl.includes('light_all'), leafletInstances[0].tileUrl);
+    leafletInstances[0].tileUrl.includes('Light_Gray'), leafletInstances[0].tileUrl);
 }
 
 /* ========================================================================== */

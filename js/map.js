@@ -5,16 +5,52 @@
    blocked/failed CDN load) instead of throwing.
    ========================================================================== */
 
+/* ---- Tiles ----
+   These were CARTO's Positron and Dark Matter until CARTO began stamping
+   "API KEY REQUIRED" diagonally across every tile — still HTTP 200, still a
+   valid PNG, just watermarked, so nothing failed loudly.
+
+   Esri's Canvas basemaps are the replacement: the same restrained grey
+   cartography, a matched light/dark pair (which the footer's theme switch
+   needs), plain raster tiles Leaflet can use with no build step, and no key.
+
+   Two differences from CARTO worth knowing:
+
+     - Labels are a separate layer. Esri ships the base and its place names
+       apart, so each theme is two tile layers — the base, then a
+       transparent (RGBA) reference layer of labels over it. Hence the
+       arrays below and in addTileLayers.
+     - The axis order is {z}/{y}/{x}, not {z}/{x}/{y}, and there are no {s}
+       subdomains or an {r} retina variant.
+
+   Real tile data stops at zoom 16; 17 and beyond return a grey "Map data
+   not yet available" placeholder. maxNativeZoom keeps Leaflet asking for 16
+   and upscaling past it, so zooming in stays continuous instead of
+   dissolving into placeholders. */
+
+const ESRI = 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas';
+
+/* Kept short on purpose: in the collage this sits over a map barely 21rem
+   wide, and the fuller wording ("Tiles © Esri — Esri, HERE, Garmin, ©
+   OpenStreetMap contributors") wrapped onto a second line and ate the
+   bottom of it. The full credit, data providers included, is on
+   attribution.html. */
+const ESRI_ATTRIBUTION =
+  'Tiles &copy; <a href="https://www.esri.com" rel="noopener">Esri</a>, ' +
+  '&copy; <a href="https://www.openstreetmap.org/copyright" rel="noopener">OpenStreetMap</a>';
+
+const MAX_NATIVE_ZOOM = 16;
+
 const TILES = {
   light: {
-    url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" rel="noopener">OpenStreetMap</a> contributors ' +
-                 '&copy; <a href="https://carto.com/attributions" rel="noopener">CARTO</a>'
+    base: ESRI + '/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+    labels: ESRI + '/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}',
+    attribution: ESRI_ATTRIBUTION
   },
   dark: {
-    url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" rel="noopener">OpenStreetMap</a> contributors ' +
-                 '&copy; <a href="https://carto.com/attributions" rel="noopener">CARTO</a>'
+    base: ESRI + '/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+    labels: ESRI + '/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}',
+    attribution: ESRI_ATTRIBUTION
   }
 };
 
@@ -39,7 +75,7 @@ const TOUCH = '(pointer: coarse)';
 /** Interactions that map a screen point to a lat/lng — unusable when tilted. */
 const POINTER_HANDLERS = ['dragging', 'doubleClickZoom', 'touchZoom'];
 
-let current = null;   // { map, tileLayer, watchers } | null
+let current = null;   // { map, tileLayers, watchers } | null
 
 function matches(query) {
   return typeof window !== 'undefined' && typeof window.matchMedia === 'function' &&
@@ -102,13 +138,23 @@ function currentScheme() {
   return prefersDark() ? 'dark' : 'light';
 }
 
-function addTileLayer(L, map, scheme) {
+/**
+ * The layers for one scheme, base first and labels over it — both, because
+ * Esri keeps place names in a separate transparent layer. Returned as an
+ * array so refreshTheme can take the whole set back off again; leaving a
+ * stale base underneath would show through the new one.
+ *
+ * The attribution rides on the base alone: Leaflet's control would otherwise
+ * print the same credit twice, once per layer.
+ */
+function addTileLayers(L, map, scheme) {
   const tiles = TILES[scheme] || TILES.light;
-  return L.tileLayer(tiles.url, {
-    attribution: tiles.attribution,
-    subdomains: 'abcd',
-    maxZoom: 20
-  }).addTo(map);
+  const options = { maxNativeZoom: MAX_NATIVE_ZOOM, maxZoom: 19 };
+
+  return [
+    L.tileLayer(tiles.base, { ...options, attribution: tiles.attribution }).addTo(map),
+    L.tileLayer(tiles.labels, options).addTo(map)
+  ];
 }
 
 /** Tear down the currently live map, if any (instance + its media watchers). */
@@ -121,7 +167,7 @@ export function detachMap() {
 
 /**
  * Create a Leaflet map in `container` centred on {lat, lon}, with a marker
- * and CARTO tiles matching the current colour scheme. Reacts to OS/browser
+ * and tiles matching the current colour scheme. Reacts to OS/browser
  * theme changes by swapping the tile layer live. Returns the map instance,
  * or null if Leaflet isn't loaded / no container was given.
  */
@@ -132,7 +178,7 @@ export function attachMap(container, { lat, lon } = {}) {
 
   const L = window.L;
   const map = L.map(container, { center: [lat, lon], zoom: 12, scrollWheelZoom: false });
-  const tileLayer = addTileLayer(L, map, currentScheme());
+  const tileLayers = addTileLayers(L, map, currentScheme());
   L.marker([lat, lon]).addTo(map);
 
   applyInteractionPolicy(map);
@@ -146,7 +192,7 @@ export function attachMap(container, { lat, lon } = {}) {
     watch(TOUCH, () => applyInteractionPolicy(map))
   ];
 
-  current = { map, tileLayer, watchers };
+  current = { map, tileLayers, watchers };
   return map;
 }
 
@@ -157,8 +203,8 @@ export function attachMap(container, { lat, lon } = {}) {
  */
 export function refreshTheme() {
   if (!current || typeof window === 'undefined' || !window.L) return;
-  current.map.removeLayer(current.tileLayer);
-  current.tileLayer = addTileLayer(window.L, current.map, currentScheme());
+  current.tileLayers.forEach(layer => current.map.removeLayer(layer));
+  current.tileLayers = addTileLayers(window.L, current.map, currentScheme());
 }
 
 /** Test-only: forget the current map without touching a (possibly fake) instance. */

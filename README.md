@@ -18,7 +18,7 @@ Milestones 1–9 complete.
 - [x] 3. Shareable `?city=` URLs, back-button support
 - [x] 2.5 City-only filtering via Wikidata `instance of`
 - [x] 4. Wikidata infobox (population, country, area, elevation, timezone)
-- [x] 5. Leaflet map (CARTO Positron/Dark Matter tiles, follows the site theme)
+- [x] 5. Leaflet map (Esri Light/Dark Gray Canvas tiles, follows the site theme)
 - [x] 6. About page, blog, attribution page
 - [x] 7. Fresh news per city (Currents API, via a small caching proxy)
 - [x] 8. "On film" per city (Wikidata narrative/filming location)
@@ -46,6 +46,18 @@ wrappers (`display: contents` while stacked) group the columns, which is
 what lets the collage close up when a city has no figures, no films or no
 photograph. Stacked, the order is unchanged: the news stays third, right
 after the facts.
+
+**Map tiles are Esri's Light Gray and Dark Gray Canvas.** They were CARTO's
+Positron and Dark Matter until CARTO started stamping "API KEY REQUIRED"
+diagonally across every tile — the request still returns HTTP 200 with a
+valid PNG, so nothing failed loudly, the maps just quietly acquired a
+watermark. Esri's pair is the closest free, keyless equivalent: the same
+restrained grey cartography, and crucially a matched light/dark pair, which
+the footer's theme switch needs. Two things differ and are handled in
+`js/map.js` — labels come as a separate transparent layer over the base (so
+each theme is two tile layers, and a swap has to remove both), and real tile
+data stops at zoom 16, past which Leaflet upscales rather than requesting
+the grey "Map data not yet available" placeholders that lie beyond it.
 
 One consequence worth knowing: Leaflet has no rotation support, so while the
 map card is tilted the interactions that convert a screen point to a

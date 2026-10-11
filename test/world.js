@@ -162,6 +162,17 @@ export function makeWorld(overrides = {}) {
       Q6072: 'Western European Time'
     },
 
+    /* The Worker's /word answers, keyed by city, in its own response shape.
+       Lisbon has some; Porto deliberately has none, so the "no words, no
+       empty panel" case is covered. */
+    words: {
+      Lisbon: [
+        { word: 'marathon', score: 1.8 },
+        { word: 'tram', score: 0.9 },
+        { word: 'pastel', score: 0.4 }
+      ]
+    },
+
     /* News proxy results, keyed by city — see harness.js's route(). Already
        in the proxy's own response shape (title/url/domain/publishedAt):
        the real worker (worker/news-proxy.js) owns fetching Currents API,

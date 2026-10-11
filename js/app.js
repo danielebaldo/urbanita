@@ -11,9 +11,10 @@ import {
 import { fetchCityNews } from './news.js';
 import { fetchCityFilms } from './films.js';
 import { fetchCityFigures } from './figures.js';
+import { fetchCityWords } from './word.js';
 
 import {
-  showSkeleton, showState, renderCity, renderFilms, renderFigures, renderOptions
+  showSkeleton, showState, renderCity, renderFilms, renderFigures, renderWords, renderOptions
 } from './ui.js';
 
 import { attachMap, detachMap, refreshTheme } from './map.js';
@@ -35,7 +36,7 @@ const randomBtn   = document.getElementById('random-btn');
 const RANDOM_ATTEMPTS = 5;
 
 let inFlight = null;
-const cache = new Map();      // normalised query -> { summary, facts, news, films, figures }
+const cache = new Map();      // normalised query -> { summary, facts, news, films, figures, words }
 
 /* --------------------------------------------------------------------------
    URL state — /?city=Lisbon
@@ -59,9 +60,10 @@ function cityFromUrl() {
    Lookup
    -------------------------------------------------------------------------- */
 
-/* Films and figures are fetched after the card is already on screen — their
-   Wikidata queries can take a few seconds for a big city, and nothing else
-   should wait on them. They run alongside each other, and share one little
+/* Films, figures and the city's word are fetched after the card is already
+   on screen — the Wikidata queries can take a few seconds for a big city,
+   and nothing else should wait on them. They run alongside each other, and
+   share one little
    lifecycle: a token, so a late answer for a city the user has moved on from
    is discarded, and a controller each to stop the requests themselves. */
 let renderToken = 0;
@@ -74,48 +76,55 @@ function cancelDeferred() {
 }
 
 /** Render the card, (re)attach its map, and start filling in the rest. */
-function showCity(summary, facts, news, { qid = null, cacheKey = null, films = null, figures = null } = {}) {
+function showCity(summary, facts, news, {
+  qid = null, cacheKey = null, films = null, figures = null, words = null
+} = {}) {
   cancelDeferred();
   const token = renderToken;
 
-  const { mapContainer, filmsSlot, figuresSlot } = renderCity(results, summary, { facts, news });
+  const { mapContainer, filmsSlot, figuresSlot, wordsSlot } = renderCity(results, summary, { facts, news });
   if (mapContainer) attachMap(mapContainer, summary.coordinates);
   else detachMap();
 
   loadDeferred({
-    slot: figuresSlot, key: 'figures', known: figures,
-    fetchItems: fetchCityFigures, render: renderFigures, qid, cacheKey, token
+    slot: wordsSlot, key: 'words', known: words, render: renderWords, cacheKey, token,
+    fetchItems: signal => fetchCityWords(summary.title, facts?.country, signal)
   });
   loadDeferred({
-    slot: filmsSlot, key: 'films', known: films,
-    fetchItems: fetchCityFilms, render: renderFilms, qid, cacheKey, token
+    slot: figuresSlot, key: 'figures', known: figures, render: renderFigures, cacheKey, token,
+    fetchItems: signal => fetchCityFigures(qid, signal)
+  });
+  loadDeferred({
+    slot: filmsSlot, key: 'films', known: films, render: renderFilms, cacheKey, token,
+    fetchItems: signal => fetchCityFilms(qid, signal)
   });
 }
 
 /**
- * Fill one deferred slot once Wikidata answers. Never throws, never blocks —
- * an unreachable endpoint just means no section, like an empty result.
+ * Fill one deferred slot once its source answers. Never throws, never
+ * blocks — an unreachable endpoint just means no section, like an empty
+ * result. A city with no QID needs no special case here: the Wikidata
+ * fetchers answer [] for it without asking anything.
  */
-async function loadDeferred({ slot, key, known, fetchItems, render, qid, cacheKey, token }) {
+async function loadDeferred({ slot, key, known, fetchItems, render, cacheKey, token }) {
   // Already known, from a cache hit or the back button — no second query.
   // An empty array counts as known: "none" is an answer we keep.
   if (known) { render(slot, known); return; }
-  if (!qid) { render(slot, []); return; }
 
   const controller = new AbortController();
   deferredControllers.add(controller);
 
   let items = [];
   try {
-    items = await fetchItems(qid, controller.signal);
+    items = await fetchItems(controller.signal);
   } catch (err) {
     if (err.name === 'AbortError') return;    // superseded by a newer search
-    items = [];                               // Wikidata down: no section, no error
+    items = [];                               // source down: no section, no error
   } finally {
     deferredControllers.delete(controller);
   }
 
-  // The user may have searched again while Wikidata was thinking.
+  // The user may have searched again while the source was thinking.
   if (token !== renderToken) return;
 
   if (cacheKey && cache.has(cacheKey)) cache.get(cacheKey)[key] = items;
@@ -195,7 +204,8 @@ async function lookup(rawQuery, { push = true } = {}) {
   if (cache.has(key)) {
     const cached = cache.get(key);
     showCity(cached.summary, cached.facts, cached.news, {
-      qid: cached.qid, cacheKey: key, films: cached.films, figures: cached.figures
+      qid: cached.qid, cacheKey: key,
+      films: cached.films, figures: cached.figures, words: cached.words
     });
     inFlight = null;
     return;

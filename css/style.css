@@ -357,8 +357,8 @@ main {
   to   { opacity: 1; transform: rotate(var(--tilt, 0deg)); }
 }
 
-/* A result is a set of separate surfaces — the city, its facts, its news,
-   the figures born there, its films, its map — with real air between them
+/* A result is a set of separate surfaces — the city, its facts, its word,
+   its news, the figures born there, its films, its map — with real air between them
    and eased in one after the other, so the eye reads them in order rather
    than as one undifferentiated slab. Stacked in one column here; the
    collage arrangement is at the bottom of this file, behind a min-width
@@ -377,10 +377,11 @@ main {
 
 .city-card      { order: 1; }
 .city-facts     { order: 2; }
-.panel--news    { order: 3; }
-.panel--figures { order: 4; }
-.panel--films   { order: 5; }
-.panel--map     { order: 6; }
+.panel--words   { order: 3; }
+.panel--news    { order: 4; }
+.panel--figures { order: 5; }
+.panel--films   { order: 6; }
+.panel--map     { order: 7; }
 
 /* Applied to the cards, never to the rails: a `display: contents` element
    has no box to animate, and animating both would double the fade. */
@@ -392,6 +393,7 @@ main {
 /* Staggered by identity rather than by :nth-child — the rails mean DOM
    position no longer tracks reading order. */
 .city-facts     { animation-delay: .08s; }
+.panel--words   { animation-delay: .1s; }
 .panel--map     { animation-delay: .12s; }
 .panel--news    { animation-delay: .16s; }
 .panel--figures { animation-delay: .2s; }
@@ -481,6 +483,24 @@ main {
 .film-list .news-meta,
 .figure-list .news-meta { font-variant-numeric: tabular-nums; }
 
+/* In a word: one word, set large, is the whole panel — the runners-up are
+   small print under it. Lower case as typed, because it's a quotation of
+   what people put in a search box, not a title. */
+.words-lead {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: 2.1rem;
+  line-height: 1.1;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.words-rest {
+  margin: .55rem 0 0;
+  font-size: .85rem;
+  color: var(--ink-soft);
+}
+
 /* --------------------------------------------------------------------------
    The collage — wide screens only
 
@@ -552,6 +572,7 @@ main {
   .city-rail > * { z-index: 1; }
 
   /* Vertical stagger, so the columns don't read as three tidy lists. */
+  .city-rail--left  .panel--words   { margin-top: 1.25rem; }
   .city-rail--left  .panel--figures { margin-top: 2.25rem; }
   .city-rail--right .panel--films   { margin-top: 2.25rem; }
 
@@ -598,8 +619,10 @@ main {
   .city-card                        { --tilt: 0deg; }
   .city-rail--left  > :nth-child(1) { --tilt: -3deg; }
   .city-rail--left  > :nth-child(2) { --tilt: -1.5deg; }
+  .city-rail--left  > :nth-child(3) { --tilt: -2.5deg; }
   .city-rail--right > :nth-child(1) { --tilt: 1.5deg; }
   .city-rail--right > :nth-child(2) { --tilt: 2.5deg; }
+  .city-rail--right > :nth-child(3) { --tilt: 1deg; }
 
   /* Rails are narrower than the middle column, so their panels need their
      own tighter padding rather than the roomy default. */

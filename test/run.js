@@ -1189,6 +1189,117 @@ await withFastClock(async () => {
 
 /* ========================================================================== */
 
+group('40. The word search pairs with a city (word.js scoring)');
+{
+  const { pickWords, searchTerm, WORD_COUNT } = await import('../js/word.js');
+
+  const berlin = pickWords([
+    ['berlin wall', 'berlin weather', 'berlin marathon 2026', 'berlin marathon 2027',
+     'berlin to paris', 'berlin germany', 'berlin time'],
+    ['berlin wall', 'berlin airport', 'berlin marathon lottery', 'berlin hotels']
+  ], { city: 'Berlin', country: 'Germany' });
+  const words = berlin.map(w => w.word);
+
+  check('two engines agreeing beat one engine repeating itself',
+    words[0] === 'wall', JSON.stringify(berlin));
+  check('repetition still counts for something', words[1] === 'marathon', JSON.stringify(words));
+  check('utility searches are set aside',
+    !words.some(w => ['weather', 'airport', 'hotels', 'time'].includes(w)), JSON.stringify(words));
+  check('route searches go entirely — the other city with them',
+    !words.includes('paris'), JSON.stringify(words));
+  check('the city and its country are not their own association',
+    !words.includes('berlin') && !words.includes('germany'), JSON.stringify(words));
+  check('years are not words', !words.some(w => /\d/.test(w)), JSON.stringify(words));
+  check('scores come best first',
+    berlin.every((w, i) => i === 0 || berlin[i - 1].score >= w.score), JSON.stringify(berlin));
+
+  const reykjavik = pickWords([['reykjavik iceland', 'reykjavik northern lights']],
+    { city: 'Reykjavík', country: 'Iceland' });
+  check('the city’s own name is recognised without its accent',
+    !reykjavik.some(w => w.word === 'reykjavik'), JSON.stringify(reykjavik));
+  check('…while other words keep theirs',
+    pickWords([['zürich müesli']], { city: 'Zürich' })[0]?.word === 'müesli');
+
+  check('"New York City" is searched as "new york"', searchTerm('New York City') === 'new york');
+  check('"Washington, D.C." is searched as "washington"',
+    searchTerm('Washington, D.C.') === 'washington');
+  check('the city words are dropped from the multi-word title too',
+    !pickWords([['new york times', 'new york city']], { city: 'New York City' })
+      .some(w => ['new', 'york', 'city'].includes(w.word)));
+
+  const many = pickWords([['x alpha', 'x bravo', 'x charlie', 'x delta', 'x echo', 'x foxtrot']], { city: 'X' });
+  check(`at most ${WORD_COUNT} words`, many.length === WORD_COUNT, many.length);
+  check('nothing to go on yields an empty list, not an error',
+    pickWords([[], null, ['bosco weather']], { city: 'Bosco' }).length === 0 &&
+    pickWords(undefined).length === 0);
+}
+
+/* ========================================================================== */
+
+group('41. The word, through the Worker (word.js client)');
+{
+  const world = makeWorld();
+  installDom(); const calls = installFetch(world);
+  const { fetchCityWords } = await import('../js/word.js');
+
+  const lisbon = await fetchCityWords('Lisbon', 'Portugal');
+  check('passes through the Worker’s words', lisbon[0]?.word === 'marathon', JSON.stringify(lisbon));
+  check('asks the /word route with the city and the country',
+    calls.some(u => u.includes('/word?') && u.includes('city=Lisbon') && u.includes('country=Portugal')),
+    JSON.stringify(calls));
+  check('a city nobody searches for yields []', (await fetchCityWords('Porto', 'Portugal')).length === 0);
+
+  world.wordProxyDown = true;
+  check('an unreachable Worker yields [], not an error',
+    (await fetchCityWords('Lisbon', 'Portugal')).length === 0);
+}
+
+/* ========================================================================== */
+
+group('42. Full app boot — the word renders');
+{
+  const { els, world } = await boot();
+  submit(els, 'Lisbon');
+  await settle();
+
+  const panels = els['results'].byClass('panel--words');
+  check('words panel renders for Lisbon', panels.length === 1);
+  check('the best word is the headline',
+    panels[0]?.byClass('words-lead')[0]?.textContent === 'marathon', panels[0]?.textContent);
+  check('the runners-up follow it',
+    panels[0]?.byClass('words-rest')[0]?.textContent.includes('tram'), panels[0]?.textContent);
+  check('it sits in the left rail, with the facts',
+    els['results'].byClass('city-rail--left')[0]?.byClass('panel--words').length === 1);
+
+  submit(els, 'Porto');
+  await settle();
+  check('no words panel when there are no words (no empty box)',
+    els['results'].byClass('panel--words').length === 0);
+
+  const before = world.wordCalls;
+  submit(els, 'Lisbon');
+  await settle();
+  check('cache hit re-renders the word without asking again', world.wordCalls === before,
+    `${before} -> ${world.wordCalls}`);
+  check('and the word is back on screen', els['results'].byClass('panel--words').length === 1);
+
+  const down = makeWorld();
+  down.wordProxyDown = true;
+  const second = await boot({ world: down });
+  submit(second.els, 'Lisbon');
+  await settle();
+  check('Worker down: the card still renders',
+    second.els['results'].byClass('city-card').length === 1);
+  check('…with no words panel and no error',
+    second.els['results'].byClass('panel--words').length === 0 &&
+    !second.els['results'].textContent.includes('Something went wrong'));
+  check('…and the films and figures are unaffected',
+    second.els['results'].byClass('panel--films').length === 1 &&
+    second.els['results'].byClass('panel--figures').length === 1);
+}
+
+/* ========================================================================== */
+
 console.log('\n' + '-'.repeat(48));
 console.log(`  ${pass} passed, ${fail} failed`);
 console.log('-'.repeat(48));

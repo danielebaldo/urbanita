@@ -531,6 +531,17 @@ function route(url, world) {
     return json({ entities });
   }
 
+  /* The Worker's /word route — before the news below, which would otherwise
+     claim it by its `city` param. Already in the Worker's response shape:
+     the scoring itself (js/word.js's pickWords) is tested on its own.
+     world.wordProxyDown makes it refuse the connection. */
+  if (u.pathname === '/word') {
+    world.wordCalls = (world.wordCalls || 0) + 1;
+    if (world.wordProxyDown) throw new Error('word proxy down');
+    const city = u.searchParams.get('city') || '';
+    return json({ words: world.words?.[city] || [] });
+  }
+
   /* Urbanita's own news proxy (worker/news-proxy.js) — matched by its
      distinctive `city` query param rather than by hostname, so the mock
      keeps working once NEWS_PROXY_URL points at a real deployed Worker

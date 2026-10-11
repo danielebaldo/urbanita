@@ -11,7 +11,7 @@ keep an API key private and results cached.
 
 ## Status
 
-Milestones 1–9 complete.
+Milestones 1–10 complete.
 
 - [x] 1. Search + summary card
 - [x] 2. Disambiguation fallback ("Did you mean…?")
@@ -23,18 +23,20 @@ Milestones 1–9 complete.
 - [x] 7. Fresh news per city (Currents API, via a small caching proxy)
 - [x] 8. "On film" per city (Wikidata narrative/filming location)
 - [x] 9. "Born here" per city (Wikidata place of birth, filtered by field)
+- [x] 10. "In a word" per city (what search autocomplete pairs with it, via the Worker)
 
 Also: a manual light/dark switch in the footer (defaults to the OS
 preference, remembered after that) on every page.
 
 A result renders as separate surfaces rather than one long card: the city
 (a full-bleed hero photograph with the name and description set into a
-scrim over it, then the summary), its key facts, where it is on the map,
-what's in the news, who was born there, and films set or shot there. Each
+scrim over it, then the summary), its key facts, the word search pairs
+with it, where it is on the map, what's in the news, who was born there,
+and films set or shot there. Each
 is omitted when there's nothing to put in it.
 
 Below 1200px they stack in one column. Above it they become a collage —
-facts and figures down the left, the city card in the middle, map and films
+facts, the word and figures down the left, the city card in the middle, map and films
 down the right, tilted a degree or two and lapping over one another, with
 the news running the full width underneath them all. Everything in the
 collage proper is what a city *is*; the news is what happens to be true
@@ -44,8 +46,8 @@ running as a few very long lines). Cards are sized by their content, so the
 composition breathes between cities rather than clipping anything. Two rail
 wrappers (`display: contents` while stacked) group the columns, which is
 what lets the collage close up when a city has no figures, no films or no
-photograph. Stacked, the order is unchanged: the news stays third, right
-after the facts.
+photograph. Stacked, the word comes straight after the facts, and the news
+straight after that.
 
 **Map tiles are Esri's Light Gray and Dark Gray Canvas.** They were CARTO's
 Positron and Dark Matter until CARTO started stamping "API KEY REQUIRED"
@@ -106,12 +108,13 @@ js/wiki.js                    Wikipedia + Wikidata calls, city classification (n
 js/news.js                    thin client for the news proxy, per city (no DOM)
 js/films.js                   films set/shot in a city, via Wikidata SPARQL (no DOM)
 js/figures.js                 people born in a city, via Wikidata SPARQL (no DOM)
+js/word.js                    the words search pairs with a city: scoring + Worker client (no DOM)
 js/wdqs.js                    the SPARQL request: proxy-first, deadline, cancel, retry (no DOM)
 js/ui.js                      rendering (no network)
 js/map.js                     Leaflet map lifecycle (the one third-party global)
 js/theme.js                   light/dark switch (every page)
 js/app.js                     wiring, URL state (index.html only)
-worker/news-proxy.js          Cloudflare Worker, two paths: news (/) and cached Wikidata (/wikidata)
+worker/news-proxy.js          Cloudflare Worker, three paths: news (/), cached Wikidata (/wikidata), words (/word)
 worker/wrangler.toml          Worker deploy config, for `npx wrangler deploy`
 test/                         Node test suite
 package.json                  only tells Node these are ES modules — nothing to install
@@ -319,6 +322,66 @@ under each name needs no label service.
   city that's been looked up before is immediate. Like the films, the
   section fills in after the card is already on screen.
 
+## How "In a word" works
+
+Edo's question: what's the one word the web most associates with a city?
+The most honest source for that is search autocomplete. Type "berlin " and
+the box offers, more or less, what everyone else typed after it. The
+Worker's `/word` route asks two engines, Google and DuckDuckGo, for
+suggestions on `"<city> "` and hands both lists to `pickWords()` in
+`js/word.js`. The scoring lives there, imported by the Worker the way the
+SPARQL builders are, so there's one definition of it and the Node tests
+can reach it.
+
+The first suggestion on its own is useless: it's "weather" or "time" for
+nearly every city on earth. What makes a city's list its own is what's
+left once the searches anyone makes about anywhere are set aside:
+
+- **Route and fixture searches go entirely** ("porto to lisbon", "paris fc
+  vs lorient"). Their other words are another city or another team.
+- **The city's own words go, and so does its country.** "lisbon portugal"
+  is a search for an address, not an association. Accents are folded for
+  this comparison only, since people type "reykjavik".
+- **A short `UTILITY` list goes:** weather (in a few languages), time,
+  maps, airports, hotels, flights, webcams, and the schedule/standings/
+  tickets a sports club gets searched for. A club or a cathedral can be the
+  point of a city, so neither one is on the list.
+- **Numbers and anything under three letters go.** That's mostly years,
+  state abbreviations and stray articles.
+
+What's left is scored by rank, since both engines order suggestions by
+search volume. A word counts once per engine at its best position, plus a
+little for each further suggestion it turns up in. So two engines that
+agree beat one engine repeating itself: "berlin wall" (top of both) wins
+over a run of "berlin marathon 2026 / 2027 / lottery" from one.
+
+Measured live: Berlin → wall, Detroit → lions, Chernobyl → disaster, New
+York → times, Kyiv → post, Tokyo → ghoul, Bosco Gurin → ski, Paris →
+baguette (with hilton and jackson right behind).
+
+### Known limits
+
+- **Both endpoints are unofficial.** They're what each engine's own search
+  box calls: keyless, undocumented, and free to change or start refusing
+  without notice. That's why they're asked server-side, at most once a day
+  per city, and why the section simply disappears when they fail.
+  Neither one sends CORS headers, so there's no direct-from-browser
+  fallback the way there is for WDQS.
+- **Namesakes win.** Naples (Italy) comes back as "florida", Paris shares
+  its list with Paris Hilton, and Venice gets "beach". That's an accurate
+  report of what people search for, and half the fun, but the word
+  belongs to the name, not necessarily to this city.
+- **Pinned to US English** (`hl=en&gl=us` for Google, `kl=us-en` for
+  DuckDuckGo). Left alone, both answer in the language of wherever the
+  request comes from, and a Cloudflare datacentre could be anywhere. Some
+  names still pull the local language regardless: Zürich gets "flughafen".
+- **Cached for a day, not a week.** Autocomplete follows the news ("berlin
+  wahl" turned up in an election week), and that drift is part of the
+  point. Like `/wikidata`, a failure is never cached; an empty answer is.
+- **Autocomplete is filtered by the engines themselves** for offensive
+  completions, and Urbanìta adds no filter of its own beyond the lists
+  above. Only single words are shown, never whole searches.
+
 ## Why the Wikidata queries go through the Worker
 
 `js/films.js` and `js/figures.js` don't call WDQS themselves any more —
@@ -473,13 +536,18 @@ All paths are relative, so both naming schemes work unchanged.
 node test/run.js
 ```
 
-240 assertions, no npm install. Covers classification (including the subclass
+271 assertions, no npm install. Covers classification (including the subclass
 walk and the batching/caching behaviour), key facts (population, country,
 area, elevation, timezone — including partial/missing data and the
 entity-claims cache reuse), city news (the proxy client's request shape and
 pass-through of results, and rendering/omitting the news section), films
 (title cleanup, the empty and unreachable cases, and that a cache hit
-doesn't re-query Wikidata), figures born in the city (name cleanup,
+doesn't re-query Wikidata), the word search pairs with a city (the
+utility/route/own-name filtering, accent folding, and that agreeing engines
+outrank one repeating itself; the Worker client; and that the panel renders,
+is omitted when empty, survives a cache hit without a second request, and
+leaves everything else alone when the Worker is down), figures born in the
+city (name cleanup,
 occupation labelling including a Q-ID outside the table, and that the two
 deferred sections neither cancel nor block each other), map
 lifecycle (attach/detach across searches, cache hits, back button,
@@ -494,7 +562,8 @@ looping, that an empty result is never retried, that both sections are
 served through the Worker when it's there, that a 404 or a refused
 connection falls back to calling WDQS directly, and that a Worker which
 merely hangs does *not* trigger that fallback. The Worker itself
-(`worker/news-proxy.js`) is verified manually — see its Known Limits above.
+(`worker/news-proxy.js`) is verified manually (`npx wrangler dev`, then
+`/word?city=Berlin&country=Germany`) — see its Known Limits above.
 
 ## Attribution
 

@@ -1,10 +1,11 @@
 /* ==========================================================================
    Urbanita — the site's Worker (Cloudflare)
 
-   Two jobs, on two paths:
+   Three jobs, on three paths:
 
      /           news for a city (everything below)
      /wikidata   the films and figures queries, cached — see WIKIDATA below
+     /word       the words search pairs with a city — see WORD below
 
    ---- News ----
    Sits between the site and its news sources:
@@ -89,6 +90,7 @@
 
 import { filmsQuery } from '../js/films.js';
 import { figuresQuery } from '../js/figures.js';
+import { pickWords, searchTerm } from '../js/word.js';
 
 const WDQS = 'https://query.wikidata.org/sparql';
 
@@ -102,6 +104,45 @@ const WIKIDATA_TTL_SECONDS = 604800;
 const WIKIDATA_TIMEOUT_MS = 50000;
 
 const QUERY_BUILDERS = { films: filmsQuery, figures: figuresQuery };
+
+/* ==========================================================================
+   WORD (/word?city=Berlin&country=Germany)
+
+   What people type after a city's name, from Google's and DuckDuckGo's
+   autocomplete, boiled down to a few words by pickWords() in js/word.js —
+   the scoring lives there so the Node tests can reach it, and so there's one
+   definition of it, the same arrangement as the Wikidata builders above.
+
+   Server-side because neither endpoint sends CORS headers, and because both
+   are unofficial: they're what each engine's own search box calls, keyless
+   and undocumented, so they're asked once a day per city from here rather
+   than once per visitor from every browser.
+
+   Both are pinned to US English. Left alone they answer in the language of
+   wherever the request comes from — from a Cloudflare datacentre that's
+   anywhere at all, and Zürich came back as "flughafen" and "hauptbahnhof".
+
+   A day, not a week: autocomplete follows what's happening ("berlin wahl"
+   turned up in the week of an election), and that drift is half the point.
+   Failures aren't cached; an empty answer is, like the Wikidata routes.
+   ========================================================================== */
+
+const WORD_TTL_SECONDS = 86400;
+const WORD_TIMEOUT_MS = 8000;
+
+const SUGGEST_SOURCES = [
+  {
+    name: 'google',
+    url: q => 'https://suggestqueries.google.com/complete/search?client=firefox&hl=en&gl=us&ie=utf-8&oe=utf-8&q=' +
+              encodeURIComponent(q),
+    read: data => data?.[1]
+  },
+  {
+    name: 'duckduckgo',
+    url: q => 'https://duckduckgo.com/ac/?kl=us-en&q=' + encodeURIComponent(q),
+    read: data => Array.isArray(data) ? data.map(d => d?.phrase) : null
+  }
+];
 
 const CURRENTS_SEARCH = 'https://api.currentsapi.services/v1/search';
 const CACHE_TTL_SECONDS = 3600;   // 1 hour: fresh enough, keeps upstream calls rare
@@ -169,6 +210,9 @@ export default {
 
     if (url.pathname === '/wikidata') {
       return handleWikidata(url, request, ctx);
+    }
+    if (url.pathname === '/word') {
+      return handleWord(url, request, ctx);
     }
 
     const city = (url.searchParams.get('city') || '').trim();
@@ -271,6 +315,54 @@ async function runSparql(sparql) {
     }
   }
   return null;
+}
+
+/* --------------------------------------------------------------------------
+   /word
+   -------------------------------------------------------------------------- */
+
+async function handleWord(url, request, ctx) {
+  const city = (url.searchParams.get('city') || '').trim().slice(0, 120);
+  const country = (url.searchParams.get('country') || '').trim().slice(0, 120);
+  if (!city) return jsonResponse({ words: [] }, 400);
+
+  const cache = caches.default;
+  const cacheKey = new Request('https://urbanita-word-cache.internal/?city=' +
+    encodeURIComponent(city) + '&country=' + encodeURIComponent(country), request);
+
+  const cached = await cache.match(cacheKey);
+  if (cached) return cached;
+
+  // The prefix ends in a space: "berlin " asks what comes after the name,
+  // where "berlin" would also offer "berliner" and "berlinale".
+  const prefix = searchTerm(city) + ' ';
+  const lists = await Promise.all(SUGGEST_SOURCES.map(src => fetchSuggestions(src, prefix)));
+
+  // Neither engine answered — that's a failure, not a city nobody searches
+  // for, and caching it would hide the city's words for a day.
+  if (lists.every(list => list === null)) {
+    return jsonResponse({ words: [], error: 'upstream unavailable' }, 502);
+  }
+
+  const words = pickWords(lists.map(list => list || []), { city, country });
+  const response = jsonResponse({ words }, 200, WORD_TTL_SECONDS);
+  ctx.waitUntil(cache.put(cacheKey, response.clone()));
+  return response;
+}
+
+/** One engine's suggestions as an array of strings, or null if it failed. */
+async function fetchSuggestions(source, prefix) {
+  try {
+    const res = await fetch(source.url(prefix), {
+      headers: { 'User-Agent': 'Urbanita/0.3 (https://urbanita.it)', 'Accept': 'application/json' },
+      signal: AbortSignal.timeout(WORD_TIMEOUT_MS)
+    });
+    if (!res.ok) return null;
+    const list = source.read(await res.json());
+    return Array.isArray(list) ? list.filter(s => typeof s === 'string') : null;
+  } catch {
+    return null;
+  }
 }
 
 function cacheKeyUrl(city, country) {

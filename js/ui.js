@@ -314,6 +314,14 @@ export function renderCity(container, data, { facts = null, news = [] } = {}) {
   const factsBox = renderFacts(facts);
   if (factsBox) leftRail.appendChild(el('div', { class: 'city-facts' }, [factsBox]));
 
+  /* --- 2b. The city in a word -------------------------------------- */
+
+  // What search pairs with the city. Deferred like the films: it comes from
+  // the Worker, which may be asking two search engines for the first time
+  // today. Under the facts, since it's the facts' irreverent cousin.
+  const wordsSlot = deferredSlot('words');
+  leftRail.appendChild(wordsSlot);
+
   /* --- 3. Who was born here ---------------------------------------- */
 
   // Deferred like the films below, and for the same reason. It goes in the
@@ -365,7 +373,7 @@ export function renderCity(container, data, { facts = null, news = [] } = {}) {
   if (newsPanel) sections.appendChild(newsPanel);
 
   container.appendChild(sections);
-  return { mapContainer, filmsSlot, figuresSlot };
+  return { mapContainer, filmsSlot, figuresSlot, wordsSlot };
 }
 
 /**
@@ -425,6 +433,34 @@ export function renderFigures(slot, figures) {
     note: 'People from the city who worked in architecture, design, ecology ' +
           'or the social sciences \u2014 best-known first'
   }, el('div', { class: 'figures' }, [list]));
+}
+
+/**
+ * Fill (or remove) the words slot left by renderCity — what people type
+ * after the city's name in a search box (see js/word.js). The best word is
+ * the whole point and gets set large; the runners-up go underneath, small,
+ * so the one word reads as the answer and the rest as its context.
+ */
+export function renderWords(slot, words) {
+  if (!words || !words.length) return fillSlot(slot, words);
+
+  const [lead, ...rest] = words;
+  const body = el('div', { class: 'words' }, [
+    el('p', { class: 'words-lead', text: lead.word })
+  ]);
+  if (rest.length) {
+    body.appendChild(el('p', {
+      class: 'words-rest',
+      text: 'Then ' + rest.map(w => w.word).join(' \u00B7 ')
+    }));
+  }
+
+  fillSlot(slot, words, {
+    title: 'In a word',
+    eyebrow: 'According to search',
+    note: 'What people most often type after the city\u2019s name into Google ' +
+          'and DuckDuckGo, once the weather and the flights are set aside'
+  }, body);
 }
 
 /* --------------------------------------------------------------------------

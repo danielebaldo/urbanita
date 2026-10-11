@@ -477,6 +477,18 @@ function route(url, world) {
     return json({ query: { search: hits } });
   }
 
+  /* TextExtracts — the whole article as plain text, for js/trivia.js.
+     world.extracts holds the text per title; world.triviaDown refuses it. */
+  if (action === 'query' && u.searchParams.get('prop') === 'extracts') {
+    world.extractCalls = (world.extractCalls || 0) + 1;
+    if (world.triviaDown) throw new Error('extracts down');
+    const title = u.searchParams.get('titles');
+    const extract = world.extracts?.[title];
+    return json({ query: { pages: [extract === undefined
+      ? { title, missing: true }
+      : { title, extract }] } });
+  }
+
   /* pageprops -> wikibase_item */
   if (action === 'query' && u.searchParams.get('prop') === 'pageprops') {
     const titles = u.searchParams.get('titles').split('|');

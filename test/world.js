@@ -173,6 +173,29 @@ export function makeWorld(overrides = {}) {
       ]
     },
 
+    /* Whole articles as plain text, the way TextExtracts returns them
+       (exsectionformat=wiki), for js/trivia.js. Lisbon's has two lines that
+       qualify, and one of each kind that mustn't: a hook in the lead (the
+       card already shows it), a hook in References, an orphan opening, and
+       a plain sentence with no hook. Porto's has nothing that qualifies. */
+    extracts: {
+      Lisbon: [
+        'Lisbon is the oldest city in western Europe, by some centuries.',
+        '',
+        '== History ==',
+        'Lisbon is home to the Livraria Bertrand, the oldest bookshop still operating in the world.',
+        'This was the largest earthquake ever recorded anywhere in the Iberian Peninsula.',
+        'The city has had many rulers over many centuries, and all of them left something behind.',
+        '',
+        '=== Reconquest ===',
+        'The 25 de Abril Bridge was the longest suspension bridge in Europe when it opened in 1966.',
+        '',
+        '== References ==',
+        'Smith, J. The largest book ever written about the oldest city in Portugal. 2001.'
+      ].join('\n'),
+      Porto: '== History ==\nPorto is a city on the Douro river in the north of Portugal, with a long history.'
+    },
+
     /* News proxy results, keyed by city — see harness.js's route(). Already
        in the proxy's own response shape (title/url/domain/publishedAt):
        the real worker (worker/news-proxy.js) owns fetching Currents API,

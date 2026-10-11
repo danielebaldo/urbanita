@@ -349,6 +349,14 @@ export function renderCity(container, data, { facts = null, news = [] } = {}) {
     }, [mapContainer]));
   }
 
+  /* --- 4b. Did you know? ------------------------------------------- */
+
+  // A line dug out of the full article (js/trivia.js) — one more request,
+  // so deferred like everything else that isn't the summary. Between the
+  // map and the films, so the right rail has its own card that may vanish.
+  const triviaSlot = deferredSlot('trivia');
+  rightRail.appendChild(triviaSlot);
+
   /* --- 5. On film --------------------------------------------------- */
 
   // Films arrive after the card is on screen (the Wikidata query can take a
@@ -373,7 +381,7 @@ export function renderCity(container, data, { facts = null, news = [] } = {}) {
   if (newsPanel) sections.appendChild(newsPanel);
 
   container.appendChild(sections);
-  return { mapContainer, filmsSlot, figuresSlot, wordsSlot };
+  return { mapContainer, filmsSlot, figuresSlot, wordsSlot, triviaSlot };
 }
 
 /**
@@ -461,6 +469,62 @@ export function renderWords(slot, words) {
     note: 'What people most often type after the city\u2019s name into Google ' +
           'and DuckDuckGo, once the weather and the flights are set aside'
   }, body);
+}
+
+/** Fisher–Yates, on a copy. */
+function shuffled(list, random = Math.random) {
+  const out = list.slice();
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(random() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+}
+
+/**
+ * Fill (or remove) the trivia slot left by renderCity: one sentence from
+ * the city's Wikipedia article, picked at random from everything
+ * js/trivia.js found, and a button to draw another. The order is shuffled
+ * once per render and then walked, so "another one" never repeats until
+ * the whole deck has been seen. Each line credits the article section it
+ * came from — it's Wikipedia's text, and that's where the rest of the
+ * story is.
+ */
+export function renderTrivia(slot, items, { random = Math.random } = {}) {
+  if (!items || !items.length) return fillSlot(slot, items);
+
+  const deck = shuffled(items, random);
+  let index = 0;
+
+  // Announced politely when it changes, so a screen reader hears the new
+  // line after pressing the button rather than nothing at all.
+  const text = el('p', { class: 'trivia-text', 'aria-live': 'polite' });
+  const source = el('a', { class: 'trivia-source', target: '_blank', rel: 'noopener' });
+  const foot = el('div', { class: 'trivia-foot' }, [source]);
+
+  function show() {
+    const item = deck[index];
+    text.textContent = item.text;
+    source.textContent = 'From \u201C' + item.section + '\u201D on Wikipedia';
+    source.setAttribute('href', item.url);
+  }
+
+  if (deck.length > 1) {
+    const next = el('button', { type: 'button', class: 'trivia-next', text: 'Another one' });
+    next.addEventListener('click', () => {
+      index = (index + 1) % deck.length;
+      show();
+    });
+    foot.appendChild(next);
+  }
+  show();
+
+  fillSlot(slot, items, {
+    title: 'Did you know?',
+    eyebrow: items.length === 1 ? '1 fact' : `${items.length} facts`,
+    note: 'Firsts, onlies and superlatives, picked at random from the ' +
+          'city\u2019s Wikipedia article'
+  }, el('div', { class: 'trivia' }, [text, foot]));
 }
 
 /* --------------------------------------------------------------------------

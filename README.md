@@ -11,7 +11,7 @@ keep an API key private and results cached.
 
 ## Status
 
-Milestones 1–10 complete.
+Milestones 1–11 complete.
 
 - [x] 1. Search + summary card
 - [x] 2. Disambiguation fallback ("Did you mean…?")
@@ -24,6 +24,7 @@ Milestones 1–10 complete.
 - [x] 8. "On film" per city (Wikidata narrative/filming location)
 - [x] 9. "Born here" per city (Wikidata place of birth, filtered by field)
 - [x] 10. "In a word" per city (what search autocomplete pairs with it, via the Worker)
+- [x] 11. "Did you know?" per city (random trivia dug out of the full Wikipedia article)
 
 Also: a manual light/dark switch in the footer (defaults to the OS
 preference, remembered after that) on every page.
@@ -31,13 +32,13 @@ preference, remembered after that) on every page.
 A result renders as separate surfaces rather than one long card: the city
 (a full-bleed hero photograph with the name and description set into a
 scrim over it, then the summary), its key facts, the word search pairs
-with it, where it is on the map, what's in the news, who was born there,
+with it, a random bit of trivia, where it is on the map, what's in the news, who was born there,
 and films set or shot there. Each
 is omitted when there's nothing to put in it.
 
 Below 1200px they stack in one column. Above it they become a collage —
-facts, the word and figures down the left, the city card in the middle, map and films
-down the right, tilted a degree or two and lapping over one another, with
+facts, the word and figures down the left, the city card in the middle, map, trivia
+and films down the right, tilted a degree or two and lapping over one another, with
 the news running the full width underneath them all. Everything in the
 collage proper is what a city *is*; the news is what happens to be true
 this week, so it reads as a footer to the rest rather than as one more
@@ -46,8 +47,8 @@ running as a few very long lines). Cards are sized by their content, so the
 composition breathes between cities rather than clipping anything. Two rail
 wrappers (`display: contents` while stacked) group the columns, which is
 what lets the collage close up when a city has no figures, no films or no
-photograph. Stacked, the word comes straight after the facts, and the news
-straight after that.
+photograph. Stacked, the word and the trivia come straight after the
+facts, and the news straight after those.
 
 **Map tiles are Esri's Light Gray and Dark Gray Canvas.** They were CARTO's
 Positron and Dark Matter until CARTO started stamping "API KEY REQUIRED"
@@ -109,6 +110,7 @@ js/news.js                    thin client for the news proxy, per city (no DOM)
 js/films.js                   films set/shot in a city, via Wikidata SPARQL (no DOM)
 js/figures.js                 people born in a city, via Wikidata SPARQL (no DOM)
 js/word.js                    the words search pairs with a city: scoring + Worker client (no DOM)
+js/trivia.js                  trivia sentences from the full Wikipedia article (no DOM)
 js/wdqs.js                    the SPARQL request: proxy-first, deadline, cancel, retry (no DOM)
 js/ui.js                      rendering (no network)
 js/map.js                     Leaflet map lifecycle (the one third-party global)
@@ -382,6 +384,62 @@ baguette (with hilton and jackson right behind).
   completions, and Urbanìta adds no filter of its own beyond the lists
   above. Only single words are shown, never whole searches.
 
+## How "Did you know?" works
+
+Edo's other request: a random bit of trivia about the city. Long city
+articles on Wikipedia are full of exactly that: the oldest bookshop still
+trading, the first city to do something, the only one that does something
+else. But it's buried mid-paragraph under History or Culture, where almost
+nobody reads it. `js/trivia.js` digs it out.
+
+One request, straight from the browser: TextExtracts returns the whole
+article as plain text with its section headings kept, and the MediaWiki API
+is CORS-open (`origin=*`), the same as the search the site already does. No
+Worker is involved.
+
+A sentence qualifies when it:
+
+- **comes from the body.** The lead is skipped, since it's the summary the
+  card already shows. So are reference-ish and list-shaped sections (See
+  also, References, Twin towns, Notable people…), plus Demographics and
+  Government, whose superlatives are census rankings ("the largest religion
+  is…") that nobody repeats at dinner.
+- **has a hook (`HOOK`):** a superlative, a nickname, "named after", a
+  legend, a record. "Only" and "first" are mostly plain words ("only 72
+  inhabitants", "in the first years of the century"), so they count only in
+  the shapes that claim something: "the only", "one of only", "the first"
+  when it isn't followed by years/half/decades….
+- **stands on its own.** No opening that leans on the sentence before
+  (`ORPHAN`: This, However, He, It, Nearby…) and no mid-sentence "one of
+  them" (`BACK_REFERENCE`). "It" is out too: it's often the city, but "It
+  is the oldest golf club in Iceland" was a golf club.
+- **reads like a sentence:** 60–260 characters, no table/formula debris,
+  and no more than three figures, since a census paragraph written as prose
+  trips the superlatives without being trivia.
+
+`pickTrivia()` returns every sentence that passes, in article order. The
+page shuffles them once per render, and "Another one" walks the shuffled
+deck, so nothing repeats until all of them have been seen. Each line links
+to its own section of the article: it's Wikipedia's text (CC BY-SA), and
+that's where the rest of the story is.
+
+Measured live: Lisbon 23 lines, Naples 33, Tokyo 33, Berlin ~70, Reykjavík
+8, Bosco Gurin 3 ("the only municipality in Ticino where German is a
+co-official language"). A stub with no hooks has none, and the panel isn't
+rendered.
+
+### Known limits
+
+- **It's a filter, not an editor.** Some survivors are true but dull ("the
+  largest railway network in Tokyo is JR East's"), and a few lean on context
+  the filter can't see. The lists are tuned against a dozen real cities and
+  are precision-first: losing a good line costs less than showing a broken
+  one.
+- **Sentence splitting is heuristic.** It knows the common abbreviations
+  ("St.", "c.", "U.S."), and a sentence the article itself runs together
+  ("…river floods.Tokyo has…") comes through as written.
+- **English Wikipedia only**, like the rest of the site.
+
 ## Why the Wikidata queries go through the Worker
 
 `js/films.js` and `js/figures.js` don't call WDQS themselves any more —
@@ -536,7 +594,7 @@ All paths are relative, so both naming schemes work unchanged.
 node test/run.js
 ```
 
-271 assertions, no npm install. Covers classification (including the subclass
+301 assertions, no npm install. Covers classification (including the subclass
 walk and the batching/caching behaviour), key facts (population, country,
 area, elevation, timezone — including partial/missing data and the
 entity-claims cache reuse), city news (the proxy client's request shape and
@@ -546,7 +604,11 @@ doesn't re-query Wikidata), the word search pairs with a city (the
 utility/route/own-name filtering, accent folding, and that agreeing engines
 outrank one repeating itself; the Worker client; and that the panel renders,
 is omitted when empty, survives a cache hit without a second request, and
-leaves everything else alone when the Worker is down), figures born in the
+leaves everything else alone when the Worker is down), trivia (lead,
+reference sections, orphan openings and back-references skipped; "only" and
+"first" as plain words rejected; section links; "Another one" walking the
+whole deck before repeating; and degrading quietly when the article is
+missing or Wikipedia is down), figures born in the
 city (name cleanup,
 occupation labelling including a Q-ID outside the table, and that the two
 deferred sections neither cancel nor block each other), map

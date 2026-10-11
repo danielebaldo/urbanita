@@ -12,9 +12,10 @@ import { fetchCityNews } from './news.js';
 import { fetchCityFilms } from './films.js';
 import { fetchCityFigures } from './figures.js';
 import { fetchCityWords } from './word.js';
+import { fetchCityTrivia } from './trivia.js';
 
 import {
-  showSkeleton, showState, renderCity, renderFilms, renderFigures, renderWords, renderOptions
+  showSkeleton, showState, renderCity, renderFilms, renderFigures, renderWords, renderTrivia, renderOptions
 } from './ui.js';
 
 import { attachMap, detachMap, refreshTheme } from './map.js';
@@ -36,7 +37,7 @@ const randomBtn   = document.getElementById('random-btn');
 const RANDOM_ATTEMPTS = 5;
 
 let inFlight = null;
-const cache = new Map();      // normalised query -> { summary, facts, news, films, figures, words }
+const cache = new Map();      // normalised query -> { summary, facts, news, films, figures, words, trivia }
 
 /* --------------------------------------------------------------------------
    URL state — /?city=Lisbon
@@ -60,8 +61,8 @@ function cityFromUrl() {
    Lookup
    -------------------------------------------------------------------------- */
 
-/* Films, figures and the city's word are fetched after the card is already
-   on screen — the Wikidata queries can take a few seconds for a big city,
+/* Films, figures, trivia and the city's word are fetched after the card is
+   already on screen — the Wikidata queries can take a few seconds for a big city,
    and nothing else should wait on them. They run alongside each other, and
    share one little
    lifecycle: a token, so a late answer for a city the user has moved on from
@@ -77,18 +78,23 @@ function cancelDeferred() {
 
 /** Render the card, (re)attach its map, and start filling in the rest. */
 function showCity(summary, facts, news, {
-  qid = null, cacheKey = null, films = null, figures = null, words = null
+  qid = null, cacheKey = null, films = null, figures = null, words = null, trivia = null
 } = {}) {
   cancelDeferred();
   const token = renderToken;
 
-  const { mapContainer, filmsSlot, figuresSlot, wordsSlot } = renderCity(results, summary, { facts, news });
+  const { mapContainer, filmsSlot, figuresSlot, wordsSlot, triviaSlot } =
+    renderCity(results, summary, { facts, news });
   if (mapContainer) attachMap(mapContainer, summary.coordinates);
   else detachMap();
 
   loadDeferred({
     slot: wordsSlot, key: 'words', known: words, render: renderWords, cacheKey, token,
     fetchItems: signal => fetchCityWords(summary.title, facts?.country, signal)
+  });
+  loadDeferred({
+    slot: triviaSlot, key: 'trivia', known: trivia, render: renderTrivia, cacheKey, token,
+    fetchItems: signal => fetchCityTrivia(summary.title, signal)
   });
   loadDeferred({
     slot: figuresSlot, key: 'figures', known: figures, render: renderFigures, cacheKey, token,
@@ -205,7 +211,8 @@ async function lookup(rawQuery, { push = true } = {}) {
     const cached = cache.get(key);
     showCity(cached.summary, cached.facts, cached.news, {
       qid: cached.qid, cacheKey: key,
-      films: cached.films, figures: cached.figures, words: cached.words
+      films: cached.films, figures: cached.figures, words: cached.words,
+      trivia: cached.trivia
     });
     inFlight = null;
     return;

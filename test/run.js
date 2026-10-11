@@ -1300,6 +1300,113 @@ group('42. Full app boot — the word renders');
 
 /* ========================================================================== */
 
+group('43. Trivia (trivia.js selection)');
+{
+  const { pickTrivia, isTrivia, splitSentences } = await import('../js/trivia.js');
+  const { makeWorld } = await import('./world.js');
+  const picked = pickTrivia(makeWorld().extracts.Lisbon);
+  const texts = picked.map(t => t.text);
+
+  check('finds the two lines that qualify', picked.length === 2, JSON.stringify(texts));
+  check('a superlative under History qualifies',
+    texts.some(t => t.includes('oldest bookshop')), JSON.stringify(texts));
+  check('subsections count, filed under their top-level section',
+    picked.find(t => t.text.includes('suspension bridge'))?.section === 'History',
+    JSON.stringify(picked));
+  check('the lead is skipped — the card already shows it',
+    !texts.some(t => t.includes('western Europe')));
+  check('References is skipped', !texts.some(t => t.includes('ever written')));
+  check('a sentence leaning on the one before is skipped',
+    !texts.some(t => t.startsWith('This')));
+  check('a sentence with no hook is skipped', !texts.some(t => t.includes('many rulers')));
+
+  check('"only" as a plain word is not a hook',
+    !isTrivia('By 2004 there were only 72 inhabitants left in the village, from a peak of 382.'));
+  check('"the only" is',
+    isTrivia('Bosco Gurin is the only municipality in Ticino where German is an official language.'));
+  check('"the first" as chronology is not',
+    !isTrivia('In the first years of the 19th century, the region was invaded by Napoleonic troops.'));
+  check('"the first … to" is',
+    isTrivia('Tokyo hosted the 1964 Summer Olympics, becoming the first Asian city to host the Games.'));
+  check('a census sentence full of figures is not',
+    !isTrivia('The Mexican population was 35,273, over 75% of Latinos, the largest group, then 5,887 and 1,200.'));
+  check('"one of them" points at something the reader can’t see',
+    !isTrivia('Reykjavík was one of them and the only one to hold on to its trading charter permanently.'));
+  check('"Nearby is…" is placed relative to something the reader can’t see',
+    !isTrivia('Nearby is the Teatro di San Carlo, which is the oldest opera house in Italy.'));
+  check('sentences are not split after "St." or "c."',
+    splitSentences('It was built by St. Anthony c. 1200 on the hill. Then it fell.').length === 2);
+  check('nothing at all yields []', pickTrivia('').length === 0 && pickTrivia(undefined).length === 0);
+}
+
+/* ========================================================================== */
+
+group('44. Trivia (trivia.js fetch)');
+{
+  const world = makeWorld();
+  installDom(); installFetch(world);
+  const { fetchCityTrivia } = await import('../js/trivia.js');
+
+  const lisbon = await fetchCityTrivia('Lisbon');
+  check('returns the qualifying lines', lisbon.length === 2, JSON.stringify(lisbon));
+  check('each links to its own section of the article',
+    lisbon[0].url === 'https://en.wikipedia.org/wiki/Lisbon#History', lisbon[0].url);
+  check('an article with nothing that qualifies yields []',
+    (await fetchCityTrivia('Porto')).length === 0);
+  check('a missing article yields []', (await fetchCityTrivia('Nowhereville')).length === 0);
+  world.triviaDown = true;
+  check('Wikipedia unreachable yields [], not an error', (await fetchCityTrivia('Lisbon')).length === 0);
+}
+
+/* ========================================================================== */
+
+group('45. Full app boot — trivia renders');
+{
+  const { els, world } = await boot();
+  submit(els, 'Lisbon');
+  await settle();
+
+  const panel = els['results'].byClass('panel--trivia')[0];
+  check('trivia panel renders for Lisbon', Boolean(panel));
+  check('it sits in the right rail',
+    els['results'].byClass('city-rail--right')[0]?.byClass('panel--trivia').length === 1);
+  const text = () => panel.byClass('trivia-text')[0].textContent;
+  const first = text();
+  check('shows one of the article’s lines',
+    first.includes('oldest bookshop') || first.includes('suspension bridge'), first);
+  check('credits the section it came from',
+    panel.byClass('trivia-source')[0].getAttribute('href') === 'https://en.wikipedia.org/wiki/Lisbon#History');
+
+  const next = panel.byClass('trivia-next')[0];
+  next.click();
+  check('"Another one" draws a different line', text() !== first, text());
+  next.click();
+  check('…and comes back round once the deck is through', text() === first, text());
+
+  submit(els, 'Porto');
+  await settle();
+  check('no trivia panel when nothing qualifies (no empty box)',
+    els['results'].byClass('panel--trivia').length === 0);
+
+  const before = world.extractCalls;
+  submit(els, 'Lisbon');
+  await settle();
+  check('cache hit re-renders without fetching the article again',
+    world.extractCalls === before, `${before} -> ${world.extractCalls}`);
+
+  const down = makeWorld();
+  down.triviaDown = true;
+  const second = await boot({ world: down });
+  submit(second.els, 'Lisbon');
+  await settle();
+  check('Wikipedia extracts down: card renders, no trivia panel, no error',
+    second.els['results'].byClass('city-card').length === 1 &&
+    second.els['results'].byClass('panel--trivia').length === 0 &&
+    !second.els['results'].textContent.includes('Something went wrong'));
+}
+
+/* ========================================================================== */
+
 console.log('\n' + '-'.repeat(48));
 console.log(`  ${pass} passed, ${fail} failed`);
 console.log('-'.repeat(48));

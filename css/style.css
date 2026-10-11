@@ -358,7 +358,7 @@ main {
 }
 
 /* A result is a set of separate surfaces — the city, its facts, its word,
-   its news, the figures born there, its films, its map — with real air between them
+   a bit of trivia, its news, the figures born there, its films, its map — with real air between them
    and eased in one after the other, so the eye reads them in order rather
    than as one undifferentiated slab. Stacked in one column here; the
    collage arrangement is at the bottom of this file, behind a min-width
@@ -378,10 +378,11 @@ main {
 .city-card      { order: 1; }
 .city-facts     { order: 2; }
 .panel--words   { order: 3; }
-.panel--news    { order: 4; }
-.panel--figures { order: 5; }
-.panel--films   { order: 6; }
-.panel--map     { order: 7; }
+.panel--trivia  { order: 4; }
+.panel--news    { order: 5; }
+.panel--figures { order: 6; }
+.panel--films   { order: 7; }
+.panel--map     { order: 8; }
 
 /* Applied to the cards, never to the rails: a `display: contents` element
    has no box to animate, and animating both would double the fade. */
@@ -395,6 +396,7 @@ main {
 .city-facts     { animation-delay: .08s; }
 .panel--words   { animation-delay: .1s; }
 .panel--map     { animation-delay: .12s; }
+.panel--trivia  { animation-delay: .14s; }
 .panel--news    { animation-delay: .16s; }
 .panel--figures { animation-delay: .2s; }
 .panel--films   { animation-delay: .24s; }
@@ -501,6 +503,49 @@ main {
   color: var(--ink-soft);
 }
 
+/* Did you know?: the sentence in the serif, like a quotation, with its
+   source and the button to draw another on one line beneath. */
+.trivia-text {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: 1.08rem;
+  line-height: 1.45;
+  color: var(--ink);
+}
+
+.trivia-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: .6rem 1rem;
+  margin-top: 1rem;
+}
+
+.trivia-source {
+  font-size: .8rem;
+  color: var(--ink-soft);
+}
+
+/* Same quiet pill as the search suggestions — a small action, not the
+   sage of "Surprise me". */
+.trivia-next {
+  font-family: inherit;
+  font-size: .82rem;
+  color: var(--ink-soft);
+  background: transparent;
+  border: 1px solid var(--stone-deep);
+  border-radius: 999px;
+  padding: .3rem .85rem;
+  cursor: pointer;
+  transition: all .15s ease;
+}
+.trivia-next:hover {
+  color: var(--ink);
+  border-color: var(--ink-soft);
+  background: var(--stone);
+}
+
 /* --------------------------------------------------------------------------
    The collage — wide screens only
 
@@ -574,6 +619,7 @@ main {
   /* Vertical stagger, so the columns don't read as three tidy lists. */
   .city-rail--left  .panel--words   { margin-top: 1.25rem; }
   .city-rail--left  .panel--figures { margin-top: 2.25rem; }
+  .city-rail--right .panel--trivia  { margin-top: 1.25rem; }
   .city-rail--right .panel--films   { margin-top: 2.25rem; }
 
   /* The news runs the full width underneath the collage rather than sitting
@@ -1057,6 +1103,7 @@ main {
 
   .suggestions { gap: .4rem; }
   .suggestions button { padding: .84rem 1.1rem; }
+  .trivia-next { padding: .78rem 1.2rem; }
 
   .random-btn { padding: .78rem 1.6rem; }
 
